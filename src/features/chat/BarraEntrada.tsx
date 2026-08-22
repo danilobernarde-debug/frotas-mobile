@@ -118,8 +118,15 @@ export function BarraEntrada({
         editable={editavel}
         pointerEvents={editavel ? 'auto' : 'none'}
         keyboardType={tecladoNumerico ? 'decimal-pad' : 'default'}
+        // multiline: o campo cresce junto com o texto (até maxHeight, depois
+        // rola por dentro) -- igual WhatsApp. Com multiline, Enter no
+        // teclado quebra linha em vez de enviar (comportamento padrão de
+        // campo multilinha, o mesmo do WhatsApp) -- por isso continua
+        // precisando tocar no ➤ pra enviar, não é mais o atalho principal.
+        multiline
         onSubmitEditing={aoTocarEnviar}
         returnKeyType="send"
+        blurOnSubmit={false}
       />
 
       <Pressable
@@ -140,7 +147,10 @@ export function BarraEntrada({
 const styles = StyleSheet.create({
   barra: {
     flexDirection: 'row',
-    alignItems: 'center',
+    // flex-end (não 'center'): conforme o campo cresce com o texto, o "+"
+    // e o botão de enviar ficam ancorados embaixo, igual WhatsApp -- com
+    // 'center' os dois ficariam flutuando no meio da altura toda.
+    alignItems: 'flex-end',
     gap: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -154,7 +164,12 @@ const styles = StyleSheet.create({
     borderColor: '#0d9488',
     borderRadius: 22,
     paddingHorizontal: 16,
-    height: 44,
+    paddingVertical: 10,
+    // minHeight/maxHeight (não height fixo): é isso que deixa o RN
+    // crescer o campo sozinho conforme o texto quebra linha, até um teto
+    // de ~5 linhas, depois passa a rolar por dentro em vez de crescer.
+    minHeight: 44,
+    maxHeight: 120,
     fontSize: 16,
     backgroundColor: '#fff',
     color: '#0f172a',
