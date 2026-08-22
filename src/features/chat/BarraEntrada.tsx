@@ -119,14 +119,12 @@ export function BarraEntrada({
         pointerEvents={editavel ? 'auto' : 'none'}
         keyboardType={tecladoNumerico ? 'decimal-pad' : 'default'}
         // multiline: o campo cresce junto com o texto (até maxHeight, depois
-        // rola por dentro) -- igual WhatsApp. Com multiline, Enter no
-        // teclado quebra linha em vez de enviar (comportamento padrão de
-        // campo multilinha, o mesmo do WhatsApp) -- por isso continua
-        // precisando tocar no ➤ pra enviar, não é mais o atalho principal.
+        // rola por dentro) -- igual WhatsApp. returnKeyType="send" +
+        // onSubmitEditing (versão anterior) fazia o Enter DISPARAR o envio
+        // em vez de quebrar linha -- exatamente o contrário do que o
+        // WhatsApp faz. Enter aqui só quebra linha; enviar é só pelo ➤.
         multiline
-        onSubmitEditing={aoTocarEnviar}
-        returnKeyType="send"
-        blurOnSubmit={false}
+        returnKeyType="default"
       />
 
       <Pressable
