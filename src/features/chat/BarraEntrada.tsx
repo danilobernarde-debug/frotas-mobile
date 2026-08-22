@@ -81,6 +81,7 @@ export function BarraEntrada({
         placeholder={placeholder}
         placeholderTextColor="#94a3b8"
         editable={editavel}
+        pointerEvents={editavel ? 'auto' : 'none'}
         keyboardType={tecladoNumerico ? 'decimal-pad' : 'default'}
         onSubmitEditing={aoTocarEnviar}
         returnKeyType="send"
@@ -114,8 +115,8 @@ const styles = StyleSheet.create({
   },
   campo: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderWidth: 1.5,
+    borderColor: '#0d9488',
     borderRadius: 22,
     paddingHorizontal: 16,
     height: 44,
@@ -123,7 +124,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     color: '#0f172a',
   },
-  campoDesabilitado: { backgroundColor: '#f1f5f9', color: '#94a3b8' },
+  campoDesabilitado: {
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    color: '#94a3b8',
+    fontStyle: 'italic',
+  },
   botaoEnviar: {
     width: 44,
     height: 44,
