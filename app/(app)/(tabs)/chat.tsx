@@ -30,19 +30,32 @@ function SecaoFluxo({
   categoria,
   onNovaCategoria,
   onConcluido,
+  onCancelar,
 }: {
   categoria: CategoriaSolicitacao
   onNovaCategoria: (categoria: CategoriaSolicitacao) => void
   onConcluido: () => void
+  onCancelar: () => void
 }) {
   const fluxo = useFluxoSolicitacao(categoria)
   return (
     <>
-      {fluxo.passoAtual > 0 && (
-        <Pressable onPress={fluxo.voltar} style={styles.voltar} hitSlop={10}>
-          <Text style={styles.voltarTexto}>← Voltar</Text>
+      {/* "Cancelar" fica sempre visível enquanto o roteiro está aberto --
+          antes só existia "Voltar", que nem aparecia no primeiro passo,
+          então não tinha como sair de uma solicitação iniciada por
+          engano sem preencher tudo até o fim. */}
+      <View style={styles.barraFluxo}>
+        {fluxo.passoAtual > 0 ? (
+          <Pressable onPress={fluxo.voltar} hitSlop={10}>
+            <Text style={styles.voltarTexto}>← Voltar</Text>
+          </Pressable>
+        ) : (
+          <View />
+        )}
+        <Pressable onPress={onCancelar} hitSlop={10}>
+          <Text style={styles.cancelarTexto}>Cancelar</Text>
         </Pressable>
-      )}
+      </View>
       <ConteudoFluxo fluxo={fluxo} />
       <BarraEntrada fluxo={fluxo} onNovaCategoria={onNovaCategoria} onConcluido={onConcluido} />
     </>
@@ -148,6 +161,7 @@ export default function TelaChat() {
               setFluxoInfo(null)
               recarregar()
             }}
+            onCancelar={() => setFluxoInfo(null)}
           />
         ) : (
           <BarraEntrada fluxo={null} onNovaCategoria={iniciarFluxo} onConcluido={recarregar} />
@@ -182,8 +196,15 @@ const styles = StyleSheet.create({
   subtitulo: { fontSize: 12, color: '#64748b', marginTop: 2 },
   vazio: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   vazioTexto: { color: '#94a3b8', textAlign: 'center', fontSize: 14 },
-  voltar: { paddingHorizontal: 16, paddingVertical: 6 },
+  barraFluxo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+  },
   voltarTexto: { color: '#64748b', fontWeight: '600', fontSize: 13 },
+  cancelarTexto: { color: '#be123c', fontWeight: '600', fontSize: 13 },
   fundoModal: { flex: 1, backgroundColor: 'rgba(15,23,42,0.4)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   cartaoConta: { width: '100%', maxWidth: 320, backgroundColor: '#fff', borderRadius: 18, padding: 24, alignItems: 'center' },
   avatarGrande: { width: 64, height: 64, borderRadius: 32, marginBottom: 12 },
