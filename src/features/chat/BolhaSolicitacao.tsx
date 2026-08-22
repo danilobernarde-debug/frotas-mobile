@@ -13,7 +13,7 @@ function moeda(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export function BolhaSolicitacao({ entrada }: { entrada: EntradaChat }) {
+export function BolhaSolicitacao({ entrada }: { entrada: EntradaChat & { tipo: 'solicitacao' } }) {
   const router = useRouter()
 
   if (entrada.fonte === 'servidor') {

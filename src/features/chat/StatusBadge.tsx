@@ -9,7 +9,7 @@ const CORES: Record<string, { bg: string; texto: string }> = {
   erro: { bg: '#fee2e2', texto: '#991b1b' },
 }
 
-export function StatusBadge({ entrada }: { entrada: EntradaChat }) {
+export function StatusBadge({ entrada }: { entrada: EntradaChat & { tipo: 'solicitacao' } }) {
   let rotulo: string
   let estilo = CORES.local
 

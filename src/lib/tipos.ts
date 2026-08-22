@@ -82,3 +82,14 @@ export interface RespostaChecklist {
   conforme: boolean | null
   observacao: string | null
 }
+
+export interface Mensagem {
+  id: number
+  encarregado_id: string | null
+  autor_id: string | null
+  regional_id: number | null
+  texto: string
+  origem_local_id: string | null
+  criado_em: string
+  autor?: Pick<Perfil, 'id' | 'nome'> | null
+}

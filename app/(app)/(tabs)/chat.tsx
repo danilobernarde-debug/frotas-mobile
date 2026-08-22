@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../../../src/auth/useAuth'
 import { BarraEntrada } from '../../../src/features/chat/BarraEntrada'
+import { BolhaMensagem } from '../../../src/features/chat/BolhaMensagem'
 import { BolhaSolicitacao } from '../../../src/features/chat/BolhaSolicitacao'
 import { ConteudoFluxo } from '../../../src/features/chat/ConteudoFluxo'
 import { useFluxoSolicitacao } from '../../../src/features/chat/useFluxoSolicitacao'
@@ -89,13 +90,17 @@ export default function TelaChat() {
         <FlatList
           data={entradas}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <BolhaSolicitacao entrada={item} />}
+          renderItem={({ item }) =>
+            item.tipo === 'mensagem' ? <BolhaMensagem entrada={item} /> : <BolhaSolicitacao entrada={item} />
+          }
           contentContainerStyle={{ paddingVertical: 12, flexGrow: 1 }}
           refreshControl={<RefreshControl refreshing={carregando} onRefresh={recarregar} />}
           ListEmptyComponent={
             !carregando && !fluxoInfo ? (
               <View style={styles.vazio}>
-                <Text style={styles.vazioTexto}>Nenhuma solicitação ainda. Toque em + pra começar.</Text>
+                <Text style={styles.vazioTexto}>
+                  Nenhuma solicitação ou mensagem ainda. Toque em + pra pedir algo, ou escreva abaixo.
+                </Text>
               </View>
             ) : null
           }
@@ -112,7 +117,7 @@ export default function TelaChat() {
             }}
           />
         ) : (
-          <BarraEntrada fluxo={null} onNovaCategoria={iniciarFluxo} onConcluido={() => {}} />
+          <BarraEntrada fluxo={null} onNovaCategoria={iniciarFluxo} onConcluido={recarregar} />
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
