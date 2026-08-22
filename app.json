@@ -1,21 +1,30 @@
 {
   "expo": {
-    "name": "frotas-mobile-novo",
-    "slug": "frotas-mobile-novo",
+    "name": "frotas-mobile",
+    "slug": "frotas-mobile",
     "version": "1.0.0",
+    "scheme": "frotas-mobile",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "experiments": {
+      "typedRoutes": true
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dbmachado.frotas",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Usado para fotografar o problema, a bomba, a placa ou o KM na solicitação."
+      }
     },
     "android": {
+      "package": "com.dbmachado.frotas",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -25,6 +34,16 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Usado para fotografar o problema, a bomba, a placa ou o KM na solicitação."
+        }
+      ]
+    ]
   }
 }
