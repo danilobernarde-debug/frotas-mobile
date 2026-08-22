@@ -9,14 +9,27 @@ const OPCOES: { categoria: CategoriaSolicitacao; icone: string; rotulo: string }
   { categoria: 'MANUTENÇÃO', icone: '🔧', rotulo: 'Manutenção' },
 ]
 
-export function MenuAnexo({ onEscolher }: { onEscolher: (categoria: CategoriaSolicitacao) => void }) {
+export function MenuAnexo({
+  onEscolher,
+  desabilitado = false,
+}: {
+  onEscolher: (categoria: CategoriaSolicitacao) => void
+  /** true enquanto uma solicitação já está em andamento -- evita iniciar
+   *  uma segunda por cima da primeira. */
+  desabilitado?: boolean
+}) {
   const [aberto, setAberto] = useState(false)
 
   return (
     <>
       <Pressable
         onPress={() => setAberto(true)}
-        style={({ pressed }) => [styles.botao, pressed && styles.botaoPressionado]}
+        disabled={desabilitado}
+        style={({ pressed }) => [
+          styles.botao,
+          desabilitado && styles.botaoDesabilitado,
+          pressed && !desabilitado && styles.botaoPressionado,
+        ]}
         accessibilityLabel="Nova solicitação"
       >
         <Text style={styles.botaoTexto}>+</Text>
@@ -56,6 +69,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   botaoPressionado: { opacity: 0.8 },
+  botaoDesabilitado: { backgroundColor: '#cbd5e1' },
   botaoTexto: { color: '#fff', fontSize: 26, fontWeight: '400', marginTop: -2 },
   fundo: { flex: 1, backgroundColor: 'rgba(15,23,42,0.4)', justifyContent: 'flex-end' },
   folha: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 36 },
