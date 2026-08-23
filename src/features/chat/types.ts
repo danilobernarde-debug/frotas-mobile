@@ -9,8 +9,9 @@ export type EntradaChatReal =
   | { fonte: 'servidor'; tipo: 'mensagem'; id: string; criadoEm: string; mensagem: Mensagem }
   | { fonte: 'local'; tipo: 'mensagem'; id: string; criadoEm: string; item: OutboxItem<MensagemPayload> }
 
-/** Marcador visual "Mensagens não lidas" -- inserido só no cliente (ver
- *  useDivisorNaoLidas.ts), nunca vem do servidor nem da fila local. */
-export type EntradaChatDivisor = { tipo: 'divisor'; id: string }
+/** Separador visual (data, ou "Mensagens não lidas") -- inserido só no
+ *  cliente (ver divisoresData.ts / useDivisorNaoLidas.ts), nunca vem do
+ *  servidor nem da fila local. */
+export type EntradaChatDivisor = { tipo: 'divisor'; id: string; rotulo: string }
 
 export type EntradaChat = EntradaChatReal | EntradaChatDivisor

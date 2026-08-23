@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
-import type { EntradaChat, EntradaChatReal } from './types'
+import type { EntradaChat } from './types'
 
 const CHAVE_ULTIMA_VISUALIZACAO = 'chat:ultima_visualizacao'
 
@@ -15,8 +15,12 @@ const CHAVE_ULTIMA_VISUALIZACAO = 'chat:ultima_visualizacao'
  * Lê o valor guardado UMA vez por abertura da tela e já grava o instante
  * atual como novo marcador -- mensagens que chegarem com o chat já
  * aberto não empurram o divisor pra baixo.
+ *
+ * Recebe EntradaChat (não só EntradaChatReal) porque roda depois de
+ * inserirDivisoresData() -- os divisores de data já misturados na lista
+ * não atrapalham o findIndex abaixo (tipo !== 'mensagem' já filtra).
  */
-export function useDivisorNaoLidas(entradas: EntradaChatReal[]): EntradaChat[] {
+export function useDivisorNaoLidas(entradas: EntradaChat[]): EntradaChat[] {
   const { perfil } = useAuth()
   const [marca, setMarca] = useState<string | null | undefined>(undefined)
   const jaLeu = useRef(false)
@@ -39,6 +43,6 @@ export function useDivisorNaoLidas(entradas: EntradaChatReal[]): EntradaChat[] {
   )
   if (indice === -1) return entradas
 
-  const divisor: EntradaChat = { tipo: 'divisor', id: 'divisor-nao-lidas' }
+  const divisor: EntradaChat = { tipo: 'divisor', id: 'divisor-nao-lidas', rotulo: 'Mensagens não lidas' }
   return [...entradas.slice(0, indice), divisor, ...entradas.slice(indice)]
 }

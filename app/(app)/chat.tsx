@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  Animated,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -8,20 +9,28 @@ import {
   StyleSheet,
   Text,
   View,
+  type ViewToken,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { BarraEntrada } from '../../src/features/chat/BarraEntrada'
 import { BolhaMensagem } from '../../src/features/chat/BolhaMensagem'
 import { BolhaSolicitacao } from '../../src/features/chat/BolhaSolicitacao'
 import { ConteudoFluxo } from '../../src/features/chat/ConteudoFluxo'
+import { inserirDivisoresData } from '../../src/features/chat/divisoresData'
 import type { EntradaChat } from '../../src/features/chat/types'
 import { useDivisorNaoLidas } from '../../src/features/chat/useDivisorNaoLidas'
 import { useFluxoSolicitacao } from '../../src/features/chat/useFluxoSolicitacao'
 import { useMinhasSolicitacoes } from '../../src/features/chat/useMinhasSolicitacoes'
+import { diaRelativo } from '../../src/lib/formato'
 import type { CategoriaSolicitacao } from '../../src/lib/tipos'
 import { useNetworkStatus } from '../../src/net/useNetworkStatus'
 import { useSyncStatus } from '../../src/outbox/useSyncStatus'
 import { CabecalhoApp } from '../../src/ui/CabecalhoApp'
+
+/** Quanto tempo o selo de data fica visível depois que a rolagem para
+ *  (ms) -- mesmo espírito do WhatsApp: aparece enquanto rola, some
+ *  sozinho pouco depois de parar. */
+const TEMPO_VISIVEL_SELO_DATA_MS = 1200
 
 /** Um roteiro por vez. Isolado num componente próprio, remontado com uma
  *  `key` nova a cada início (mesmo repetindo a mesma categoria) -- é o
@@ -65,7 +74,7 @@ function SecaoFluxo({
 
 export default function TelaChat() {
   const { entradas, carregando, recarregar } = useMinhasSolicitacoes()
-  const entradasComDivisor = useDivisorNaoLidas(entradas)
+  const entradasComDivisor = useDivisorNaoLidas(inserirDivisoresData(entradas))
   const { pendentes, sincronizando } = useSyncStatus()
   const conectado = useNetworkStatus()
 
@@ -78,6 +87,33 @@ export default function TelaChat() {
   // nova mensagem chegando) não devem puxar a rolagem de quem já subiu
   // pra ler o histórico.
   const jaRolou = useRef(false)
+
+  // Selo flutuante de data (estilo WhatsApp): mostra a data do topo da
+  // tela enquanto rola, some sozinho pouco depois de parar.
+  const [dataSelo, setDataSelo] = useState<string | null>(null)
+  const opacidadeSeloData = useRef(new Animated.Value(0)).current
+  const timeoutSeloData = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const aoMudarItensVisiveis = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const primeiro = viewableItems[0]?.item as EntradaChat | undefined
+    if (!primeiro) return
+    setDataSelo(primeiro.tipo === 'divisor' ? primeiro.rotulo : diaRelativo(primeiro.criadoEm))
+  }).current
+  const configuracaoVisibilidade = useRef({ itemVisiblePercentThreshold: 0 }).current
+
+  function aoRolarLista() {
+    Animated.timing(opacidadeSeloData, { toValue: 1, duration: 120, useNativeDriver: true }).start()
+    if (timeoutSeloData.current) clearTimeout(timeoutSeloData.current)
+    timeoutSeloData.current = setTimeout(() => {
+      Animated.timing(opacidadeSeloData, { toValue: 0, duration: 300, useNativeDriver: true }).start()
+    }, TEMPO_VISIVEL_SELO_DATA_MS)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (timeoutSeloData.current) clearTimeout(timeoutSeloData.current)
+    }
+  }, [])
 
   // onContentSizeChange (1ª tentativa) não disparava de forma confiável
   // no Android -- mesma categoria de instabilidade de plataforma já
@@ -123,35 +159,52 @@ export default function TelaChat() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <FlatList
-          ref={listaRef}
-          data={entradasComDivisor}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) =>
-            item.tipo === 'divisor' ? (
-              <View style={styles.divisor}>
-                <View style={styles.divisorLinha} />
-                <Text style={styles.divisorTexto}>Mensagens não lidas</Text>
-                <View style={styles.divisorLinha} />
+        <View style={styles.areaLista}>
+          <FlatList
+            ref={listaRef}
+            data={entradasComDivisor}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) =>
+              item.tipo === 'divisor' ? (
+                <View style={styles.divisor}>
+                  <View style={styles.divisorLinha} />
+                  <Text style={styles.divisorTexto}>{item.rotulo}</Text>
+                  <View style={styles.divisorLinha} />
+                </View>
+              ) : item.tipo === 'mensagem' ? (
+                <BolhaMensagem entrada={item} />
+              ) : (
+                <BolhaSolicitacao entrada={item} />
+              )
+            }
+            contentContainerStyle={{ paddingVertical: 12, flexGrow: 1 }}
+            refreshControl={<RefreshControl refreshing={carregando} onRefresh={recarregar} />}
+            onScroll={aoRolarLista}
+            scrollEventThrottle={100}
+            onViewableItemsChanged={aoMudarItensVisiveis}
+            viewabilityConfig={configuracaoVisibilidade}
+            ListEmptyComponent={
+              !carregando && !fluxoInfo ? (
+                <View style={styles.vazio}>
+                  <Text style={styles.vazioTexto}>
+                    Nenhuma solicitação ou mensagem ainda. Toque em + pra pedir algo, ou escreva abaixo.
+                  </Text>
+                </View>
+              ) : null
+            }
+          />
+
+          {dataSelo && (
+            <Animated.View
+              style={[styles.seloDataContainer, { opacity: opacidadeSeloData }]}
+              pointerEvents="none"
+            >
+              <View style={styles.seloDataPilula}>
+                <Text style={styles.seloDataTexto}>{dataSelo}</Text>
               </View>
-            ) : item.tipo === 'mensagem' ? (
-              <BolhaMensagem entrada={item} />
-            ) : (
-              <BolhaSolicitacao entrada={item} />
-            )
-          }
-          contentContainerStyle={{ paddingVertical: 12, flexGrow: 1 }}
-          refreshControl={<RefreshControl refreshing={carregando} onRefresh={recarregar} />}
-          ListEmptyComponent={
-            !carregando && !fluxoInfo ? (
-              <View style={styles.vazio}>
-                <Text style={styles.vazioTexto}>
-                  Nenhuma solicitação ou mensagem ainda. Toque em + pra pedir algo, ou escreva abaixo.
-                </Text>
-              </View>
-            ) : null
-          }
-        />
+            </Animated.View>
+          )}
+        </View>
 
         {fluxoInfo ? (
           <SecaoFluxo
@@ -174,11 +227,20 @@ export default function TelaChat() {
 
 const styles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: '#f8fafc' },
+  areaLista: { flex: 1 },
   vazio: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   vazioTexto: { color: '#94a3b8', textAlign: 'center', fontSize: 14 },
   divisor: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10 },
   divisorLinha: { flex: 1, height: 1, backgroundColor: '#cbd5e1' },
   divisorTexto: { fontSize: 12, fontWeight: '700', color: '#64748b' },
+  seloDataContainer: { position: 'absolute', top: 8, left: 0, right: 0, alignItems: 'center' },
+  seloDataPilula: {
+    backgroundColor: 'rgba(15,23,42,0.75)',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  seloDataTexto: { color: '#fff', fontSize: 12, fontWeight: '700' },
   barraFluxo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
