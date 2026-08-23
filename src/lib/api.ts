@@ -24,12 +24,23 @@ export async function enviarAnexo(params: {
   tipo?: string
   legenda?: string
   tokenAcesso: string
+  /** Só as 3 fotos do abastecimento carregam isto -- ver FotoPayload em
+   *  outbox/handlers/novaSolicitacao.ts. Fotos de manutenção/checklist
+   *  nunca preenchem, então nunca entram no form. */
+  capturadaEm?: string
+  latitude?: number
+  longitude?: number
+  localizacaoRotulo?: string
 }): Promise<AnexoEnviado> {
   const form = new FormData()
   form.append('alvo', params.alvo)
   form.append(params.alvo === 'aprovacoes' ? 'aprovacao_id' : 'checklist_id', String(params.idPai))
   if (params.tipo) form.append('tipo', params.tipo)
   if (params.legenda) form.append('legenda', params.legenda)
+  if (params.capturadaEm) form.append('capturada_em', params.capturadaEm)
+  if (params.latitude !== undefined) form.append('latitude', String(params.latitude))
+  if (params.longitude !== undefined) form.append('longitude', String(params.longitude))
+  if (params.localizacaoRotulo) form.append('localizacao_rotulo', params.localizacaoRotulo)
   // RN representa um arquivo local assim, não como Blob/File (isso não é
   // web) -- o cast é porque o tipo de FormData do TS não conhece esse
   // formato, mas é exatamente o que fetch do React Native espera.

@@ -20,7 +20,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.dbmachado.frotas",
       "infoPlist": {
-        "NSCameraUsageDescription": "Usado para fotografar o problema, a bomba, a placa ou o KM na solicitação."
+        "NSCameraUsageDescription": "Usado para fotografar o problema, a bomba, a placa ou o KM na solicitação.",
+        "NSLocationWhenInUseUsageDescription": "Usado para registrar onde a foto do abastecimento foi tirada."
       }
     },
     "android": {
@@ -42,6 +43,12 @@
         "expo-image-picker",
         {
           "cameraPermission": "Usado para fotografar o problema, a bomba, a placa ou o KM na solicitação."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Usado para registrar onde a foto do abastecimento foi tirada."
         }
       ]
     ]

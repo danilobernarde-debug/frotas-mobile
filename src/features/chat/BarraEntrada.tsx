@@ -46,7 +46,7 @@ export function BarraEntrada({
   if (passo?.tipo === 'texto') {
     placeholder = passo.pergunta
     editavel = true
-  } else if (passo?.tipo === 'valor') {
+  } else if (passo?.tipo === 'valor' || passo?.tipo === 'km') {
     placeholder = passo.pergunta
     editavel = true
     tecladoNumerico = true
@@ -86,14 +86,14 @@ export function BarraEntrada({
       return
     }
 
-    if (passo.tipo === 'texto' || passo.tipo === 'valor') {
+    if (passo.tipo === 'texto' || passo.tipo === 'valor' || passo.tipo === 'km') {
       fluxo.enviarTexto(texto)
     }
   }
 
   const habilitaEnviar = fluxo
     ? passo?.tipo === 'valor' ||
-      (passo?.tipo === 'texto' && texto.trim().length > 0) ||
+      ((passo?.tipo === 'texto' || passo?.tipo === 'km') && texto.trim().length > 0) ||
       (passo?.tipo === 'confirmar' && fluxo?.podeConfirmar)
     : texto.trim().length > 0
 

@@ -66,6 +66,7 @@ export function ConteudoFluxo({ fluxo }: { fluxo: FluxoSolicitacao }) {
         <Bolha texto="Revise e toque no ➤ para enviar" />
         <View style={styles.resumo}>
           <LinhaResumo rotulo="Veículo" valor={fluxo.veiculo ? `${fluxo.veiculo.placa} — ${fluxo.veiculo.modelo}` : '—'} />
+          {fluxo.odometro ? <LinhaResumo rotulo="KM" valor={fluxo.odometro} /> : null}
           {fluxo.descricao ? <LinhaResumo rotulo="Descrição" valor={fluxo.descricao} /> : null}
           {fluxo.fotos.length > 0 && <LinhaResumo rotulo="Fotos" valor={`${fluxo.fotos.length} anexada(s)`} />}
         </View>

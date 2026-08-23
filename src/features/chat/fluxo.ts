@@ -1,6 +1,6 @@
 import type { CategoriaSolicitacao } from '../../lib/tipos'
 
-export type TipoPasso = 'veiculo' | 'texto' | 'foto_unica' | 'foto_multipla' | 'valor' | 'confirmar'
+export type TipoPasso = 'veiculo' | 'km' | 'texto' | 'foto_unica' | 'foto_multipla' | 'valor' | 'confirmar'
 
 export interface DefinicaoPasso {
   id: string
@@ -17,12 +17,14 @@ export interface DefinicaoPasso {
  */
 export function obterFluxo(categoria: CategoriaSolicitacao): DefinicaoPasso[] {
   const veiculo: DefinicaoPasso = { id: 'veiculo', tipo: 'veiculo', pergunta: 'Qual veículo?' }
+  const km: DefinicaoPasso = { id: 'km', tipo: 'km', pergunta: 'Qual o KM atual do veículo?' }
   const valor: DefinicaoPasso = { id: 'valor', tipo: 'valor', pergunta: 'Valor estimado (opcional)' }
   const confirmar: DefinicaoPasso = { id: 'confirmar', tipo: 'confirmar', pergunta: 'Confirmar envio' }
 
   if (categoria === 'ABASTECIMENTO') {
     return [
       veiculo,
+      km,
       { id: 'foto_bomba', tipo: 'foto_unica', pergunta: 'Foto da bomba de combustível', tipoFoto: 'BOMBA' },
       { id: 'foto_placa', tipo: 'foto_unica', pergunta: 'Foto da placa do veículo', tipoFoto: 'PLACA' },
       { id: 'foto_km', tipo: 'foto_unica', pergunta: 'Foto do KM do veículo', tipoFoto: 'KM' },

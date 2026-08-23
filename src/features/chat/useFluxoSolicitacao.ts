@@ -1,10 +1,20 @@
 import { useState } from 'react'
 import { capturarFoto } from '../../camera/capturarFoto'
+import { obterLocalizacaoAtual } from '../../lib/localizacao'
 import type { CategoriaSolicitacao, Veiculo } from '../../lib/tipos'
 import { TIPO_NOVA_SOLICITACAO, type FotoPayload, type NovaSolicitacaoPayload } from '../../outbox/handlers/novaSolicitacao'
 import { enfileirar } from '../../outbox/outbox'
 import { runSync } from '../../outbox/syncEngine'
 import { obterFluxo } from './fluxo'
+
+interface FotoCapturada {
+  tipoFoto: string
+  uriLocal: string
+  capturadaEm?: string
+  latitude?: number
+  longitude?: number
+  localizacaoRotulo?: string
+}
 
 function paraNumero(texto: string): number {
   const limpo = texto.trim()
@@ -25,8 +35,9 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
   const [passoAtual, setPassoAtual] = useState(0)
   const [veiculo, setVeiculo] = useState<Veiculo | null>(null)
   const [descricao, setDescricao] = useState('')
+  const [odometro, setOdometro] = useState('')
   const [valor, setValor] = useState('')
-  const [fotos, setFotos] = useState<{ tipoFoto: string; uriLocal: string }[]>([])
+  const [fotos, setFotos] = useState<FotoCapturada[]>([])
   const [capturando, setCapturando] = useState(false)
   const [enviando, setEnviando] = useState(false)
 
@@ -45,12 +56,17 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
     avancar()
   }
 
-  /** Usada pelo passo 'texto' (descrição) e 'valor' -- a barra de entrada
-   *  chama isto ao tocar no ícone de enviar. */
+  /** Usada pelo passo 'texto' (descrição), 'km' e 'valor' -- a barra de
+   *  entrada chama isto ao tocar no ícone de enviar. */
   function enviarTexto(digitado: string) {
     if (passo.tipo === 'texto') {
       if (!digitado.trim()) return // descrição é obrigatória, não avança em branco
       setDescricao(digitado.trim())
+      avancar()
+    } else if (passo.tipo === 'km') {
+      // obrigatório, diferente de 'valor' -- é o dado que a feature existe pra coletar
+      if (!digitado.trim() || paraNumero(digitado) <= 0) return
+      setOdometro(digitado)
       avancar()
     } else if (passo.tipo === 'valor') {
       setValor(digitado) // opcional -- avança mesmo em branco
@@ -62,10 +78,30 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
     if (passo.tipo !== 'foto_unica' || !passo.tipoFoto) return
     setCapturando(true)
     const uri = await capturarFoto()
+    if (!uri) {
+      setCapturando(false)
+      return
+    }
+    // Carimba no momento da captura, não do envio -- importa num app
+    // offline-first, onde a foto pode subir horas depois. Só chama
+    // obterLocalizacaoAtual() (pode levar alguns segundos) depois de
+    // confirmar que o usuário não cancelou a foto, pra não pagar a
+    // espera do GPS à toa.
+    const capturadaEm = new Date().toISOString()
+    const local = await obterLocalizacaoAtual()
     setCapturando(false)
-    if (!uri) return
     const tipoFoto = passo.tipoFoto
-    setFotos((atual) => [...atual.filter((f) => f.tipoFoto !== tipoFoto), { tipoFoto, uriLocal: uri }])
+    setFotos((atual) => [
+      ...atual.filter((f) => f.tipoFoto !== tipoFoto),
+      {
+        tipoFoto,
+        uriLocal: uri,
+        capturadaEm,
+        latitude: local?.latitude,
+        longitude: local?.longitude,
+        localizacaoRotulo: local?.rotulo ?? undefined,
+      },
+    ])
     avancar()
   }
 
@@ -85,7 +121,16 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
       categoria,
       servico: categoria === 'ABASTECIMENTO' ? 'Abastecimento' : descricao,
       valor: paraNumero(valor),
-      fotos: fotos.map<FotoPayload>((f) => ({ uriLocal: f.uriLocal, tipo: f.tipoFoto, status: 'pendente' })),
+      odometro: categoria === 'ABASTECIMENTO' ? paraNumero(odometro) : null,
+      fotos: fotos.map<FotoPayload>((f) => ({
+        uriLocal: f.uriLocal,
+        tipo: f.tipoFoto,
+        status: 'pendente',
+        capturadaEm: f.capturadaEm,
+        latitude: f.latitude,
+        longitude: f.longitude,
+        localizacaoRotulo: f.localizacaoRotulo,
+      })),
     }
     await enfileirar(TIPO_NOVA_SOLICITACAO, payload)
     runSync()
@@ -93,7 +138,9 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
   }
 
   const podeConfirmar = Boolean(
-    veiculo && (categoria !== 'MANUTENÇÃO' || (descricao.trim() && fotos.length > 0)),
+    veiculo &&
+      (categoria !== 'MANUTENÇÃO' || (descricao.trim() && fotos.length > 0)) &&
+      (categoria !== 'ABASTECIMENTO' || paraNumero(odometro) > 0),
   )
 
   return {
@@ -103,6 +150,7 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
     passoAtual,
     veiculo,
     descricao,
+    odometro,
     valor,
     fotos,
     capturando,

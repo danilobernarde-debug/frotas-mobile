@@ -11,6 +11,13 @@ export interface FotoPayload {
   tipo: string
   legenda?: string
   status: 'pendente' | 'enviado'
+  /** Só nas 3 fotos do abastecimento -- alimentam a marca d'água no
+   *  servidor. Capturadas no momento da foto, não do envio (importa num
+   *  app offline-first, onde a foto pode subir horas depois). */
+  capturadaEm?: string
+  latitude?: number
+  longitude?: number
+  localizacaoRotulo?: string
 }
 
 export interface NovaSolicitacaoPayload {
@@ -18,6 +25,7 @@ export interface NovaSolicitacaoPayload {
   categoria: CategoriaSolicitacao
   servico: string
   valor: number
+  odometro: number | null
   fotos: FotoPayload[]
   aprovacaoId?: number
 }
@@ -38,6 +46,7 @@ async function enviar(
         categoria: payload.categoria,
         servico: payload.servico,
         valor: payload.valor,
+        odometro: payload.odometro,
         origem_local_id: ctx.itemId,
       })
       .select('id')
@@ -88,6 +97,10 @@ async function enviar(
         tipo: foto.tipo,
         legenda: foto.legenda,
         tokenAcesso: token,
+        capturadaEm: foto.capturadaEm,
+        latitude: foto.latitude,
+        longitude: foto.longitude,
+        localizacaoRotulo: foto.localizacaoRotulo,
       })
     } catch (e) {
       const mensagem = e instanceof Error ? e.message : String(e)
