@@ -88,12 +88,18 @@ export function BarraEntrada({
 
     if (passo.tipo === 'texto' || passo.tipo === 'valor' || passo.tipo === 'km') {
       fluxo.enviarTexto(texto)
+      return
+    }
+
+    if (passo.tipo === 'foto_multipla') {
+      fluxo.avancar()
     }
   }
 
   const habilitaEnviar = fluxo
     ? passo?.tipo === 'valor' ||
       ((passo?.tipo === 'texto' || passo?.tipo === 'km') && texto.trim().length > 0) ||
+      (passo?.tipo === 'foto_multipla' && fluxo.fotos.length > 0) ||
       (passo?.tipo === 'confirmar' && fluxo?.podeConfirmar)
     : texto.trim().length > 0
 
