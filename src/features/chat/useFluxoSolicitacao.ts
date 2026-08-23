@@ -40,11 +40,6 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
   const [fotos, setFotos] = useState<FotoCapturada[]>([])
   const [capturando, setCapturando] = useState(false)
   const [enviando, setEnviando] = useState(false)
-  // true só durante a pausa curta entre "foto tirada" e o avanço
-  // automático -- ConteudoFluxo.tsx usa isso pra decidir se mostra só o
-  // check (avançando sozinho) ou o check + Tirar de novo/Continuar (caso
-  // de ter voltado pra uma foto já tirada, sem avanço em andamento).
-  const [avancandoAuto, setAvancandoAuto] = useState(false)
 
   // Dispara assim que o roteiro de abastecimento começa -- antes até do
   // veículo/KM serem escolhidos, não só depois da 1ª foto. Duas razões:
@@ -100,8 +95,12 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
     }
   }
 
-  async function tirarFotoUnica() {
-    if (passo.tipo !== 'foto_unica' || !passo.tipoFoto) return
+  /** Usada pelo passo fotos_abastecimento -- todas as fotos fixas ficam
+   *  visíveis juntas (não mais uma pergunta por vez), então capturar uma
+   *  não avança o passo sozinho; só substitui a foto daquele tipo,
+   *  igual "tirar de novo" também faz. Quem avança é o botão de enviar
+   *  do rodapé, quando os 3 tipos já tiverem foto (ver BarraEntrada). */
+  async function tirarFotoSlot(tipoFoto: string) {
     setCapturando(true)
     const uri = await capturarFoto()
     if (!uri) {
@@ -116,7 +115,6 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
     const capturadaEm = new Date().toISOString()
     const local = await (localizacaoPromise.current ?? Promise.resolve(null))
     setCapturando(false)
-    const tipoFoto = passo.tipoFoto
     setFotos((atual) => [
       ...atual.filter((f) => f.tipoFoto !== tipoFoto),
       {
@@ -128,14 +126,6 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
         localizacaoRotulo: local?.rotulo ?? undefined,
       },
     ])
-    // Mostra "✓ Foto registrada" por um instante antes de avançar sozinho
-    // -- dá tempo do usuário perceber que pegou, sem precisar tocar em
-    // nada (diferente de voltar numa foto já tirada, onde não há avanço
-    // automático em andamento e por isso aparecem os links de ação).
-    setAvancandoAuto(true)
-    await new Promise((resolve) => setTimeout(resolve, 700))
-    setAvancandoAuto(false)
-    avancar()
   }
 
   async function tirarFotoMultipla() {
@@ -170,10 +160,16 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
     setEnviando(false)
   }
 
+  // slots exigidos do abastecimento (BOMBA/PLACA/KM) -- lidos do próprio
+  // roteiro em vez de repetir a lista aqui, pra ter uma única fonte de
+  // verdade (ver fluxo.ts).
+  const slotsAbastecimento = passos.find((p) => p.tipo === 'fotos_abastecimento')?.slots ?? []
   const podeConfirmar = Boolean(
     veiculo &&
       (categoria !== 'MANUTENÇÃO' || (descricao.trim() && fotos.length > 0)) &&
-      (categoria !== 'ABASTECIMENTO' || paraNumero(odometro) > 0),
+      (categoria !== 'ABASTECIMENTO' ||
+        (paraNumero(odometro) > 0 &&
+          slotsAbastecimento.every((s) => fotos.some((f) => f.tipoFoto === s.tipoFoto)))),
   )
 
   return {
@@ -187,13 +183,12 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
     valor,
     fotos,
     capturando,
-    avancandoAuto,
     enviando,
     podeConfirmar,
     escolherVeiculo,
     enviarTexto,
     avancar,
-    tirarFotoUnica,
+    tirarFotoSlot,
     tirarFotoMultipla,
     enviarSolicitacao,
     voltar,

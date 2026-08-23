@@ -1,17 +1,22 @@
 import type { CategoriaSolicitacao } from '../../lib/tipos'
 
-export type TipoPasso = 'veiculo' | 'km' | 'texto' | 'foto_unica' | 'foto_multipla' | 'valor' | 'confirmar'
+export type TipoPasso = 'veiculo' | 'km' | 'texto' | 'fotos_abastecimento' | 'foto_multipla' | 'valor' | 'confirmar'
+
+/** Uma foto fixa exigida dentro do passo fotos_abastecimento -- vira o
+ *  `tipo` do anexo (BOMBA/PLACA/KM) quando capturada. */
+export interface SlotFotoFixa {
+  tipoFoto: string
+  rotulo: string
+  textoBotao: string
+}
 
 export interface DefinicaoPasso {
   id: string
   tipo: TipoPasso
   pergunta: string
-  /** Só pra passos foto_unica -- vira o `tipo` do anexo (BOMBA/PLACA/KM). */
-  tipoFoto?: string
-  /** Só pra passos foto_unica -- texto do botão de captura, específico
-   *  por foto (ex.: "Tirar foto da bomba"). Sem isso, o botão usa o
-   *  texto genérico padrão. */
-  textoBotao?: string
+  /** Só pro passo fotos_abastecimento -- as fotos fixas exigidas, todas
+   *  mostradas juntas de uma vez (não mais uma por vez em sequência). */
+  slots?: SlotFotoFixa[]
 }
 
 /**
@@ -29,9 +34,16 @@ export function obterFluxo(categoria: CategoriaSolicitacao): DefinicaoPasso[] {
     return [
       veiculo,
       km,
-      { id: 'foto_bomba', tipo: 'foto_unica', pergunta: 'Foto da bomba de combustível', tipoFoto: 'BOMBA', textoBotao: 'Tirar foto da bomba' },
-      { id: 'foto_km', tipo: 'foto_unica', pergunta: 'Foto do KM do veículo', tipoFoto: 'KM', textoBotao: 'Tirar foto do hodômetro' },
-      { id: 'foto_placa', tipo: 'foto_unica', pergunta: 'Foto da placa do veículo', tipoFoto: 'PLACA', textoBotao: 'Tirar foto da placa' },
+      {
+        id: 'fotos_abastecimento',
+        tipo: 'fotos_abastecimento',
+        pergunta: 'Fotos do abastecimento',
+        slots: [
+          { tipoFoto: 'BOMBA', rotulo: 'Bomba de combustível', textoBotao: 'Tirar foto da bomba' },
+          { tipoFoto: 'KM', rotulo: 'KM do veículo', textoBotao: 'Tirar foto do hodômetro' },
+          { tipoFoto: 'PLACA', rotulo: 'Placa do veículo', textoBotao: 'Tirar foto da placa' },
+        ],
+      },
       valor,
       confirmar,
     ]

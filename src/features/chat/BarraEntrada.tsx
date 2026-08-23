@@ -53,7 +53,7 @@ export function BarraEntrada({
   } else if (passo?.tipo === 'veiculo') {
     placeholder = 'Escolha um veículo acima ↑'
     editavel = false
-  } else if (passo?.tipo === 'foto_unica' || passo?.tipo === 'foto_multipla') {
+  } else if (passo?.tipo === 'fotos_abastecimento' || passo?.tipo === 'foto_multipla') {
     placeholder = 'Toque em 📷 acima ↑'
     editavel = false
   } else if (passo?.tipo === 'confirmar') {
@@ -91,15 +91,23 @@ export function BarraEntrada({
       return
     }
 
-    if (passo.tipo === 'foto_multipla') {
+    if (passo.tipo === 'foto_multipla' || passo.tipo === 'fotos_abastecimento') {
       fluxo.avancar()
     }
   }
+
+  // fotos_abastecimento: só habilita quando TODAS as fotos fixas do passo
+  // (lidas do próprio passo, não repetidas aqui -- ver fluxo.ts) já foram
+  // tiradas, não só uma qualquer (diferente de foto_multipla, onde 1 já basta).
+  const todasFotosFixasProntas = Boolean(
+    fluxo && passo?.tipo === 'fotos_abastecimento' && passo.slots?.every((s) => fluxo.fotos.some((f) => f.tipoFoto === s.tipoFoto)),
+  )
 
   const habilitaEnviar = fluxo
     ? passo?.tipo === 'valor' ||
       ((passo?.tipo === 'texto' || passo?.tipo === 'km') && texto.trim().length > 0) ||
       (passo?.tipo === 'foto_multipla' && fluxo.fotos.length > 0) ||
+      todasFotosFixasProntas ||
       (passo?.tipo === 'confirmar' && fluxo?.podeConfirmar)
     : texto.trim().length > 0
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useVeiculos } from '../veiculos/useVeiculos'
 import type { FluxoSolicitacao } from './useFluxoSolicitacao'
 
@@ -12,6 +12,9 @@ export function ConteudoFluxo({ fluxo }: { fluxo: FluxoSolicitacao }) {
   const { veiculos } = useVeiculos()
   const { passo } = fluxo
   const [buscaVeiculo, setBuscaVeiculo] = useState('')
+  // uri local (não precisa buscar do servidor -- a foto ainda nem foi
+  // enviada) da foto aberta em tela cheia, ou null se o modal tá fechado.
+  const [fotoAberta, setFotoAberta] = useState<string | null>(null)
 
   if (passo.tipo === 'veiculo') {
     const filtro = buscaVeiculo.trim().toLowerCase()
@@ -56,35 +59,53 @@ export function ConteudoFluxo({ fluxo }: { fluxo: FluxoSolicitacao }) {
     )
   }
 
-  if (passo.tipo === 'foto_unica') {
-    const jaTem = fluxo.fotos.some((f) => f.tipoFoto === passo.tipoFoto)
+  if (passo.tipo === 'fotos_abastecimento') {
+    // As 3 fotos ficam todas visíveis juntas, cada uma independente --
+    // sem avançar sozinho ao tirar uma (diferente do roteiro anterior,
+    // passo a passo). Tocar numa foto já tirada abre ela inteira; quem
+    // avança pro próximo passo é o ➤ do rodapé, quando as 3 já tiverem
+    // sido tiradas (ver habilitaEnviar em BarraEntrada.tsx).
     return (
       <View style={styles.bloco}>
         <Bolha texto={passo.pergunta} />
-        {jaTem ? (
-          fluxo.avancandoAuto ? (
-            // Acabou de tirar esta foto -- só o check, avança sozinho
-            // em seguida (ver tirarFotoUnica em useFluxoSolicitacao.ts).
-            <Text style={styles.fotoOk}>✓ Foto registrada</Text>
-          ) : (
-            // Voltou pra um passo cuja foto já tinha sido tirada -- sem
-            // avanço automático em andamento, precisa de uma ação
-            // explícita pra seguir (ou trocar a foto).
-            <View style={styles.fotoRegistradaLinha}>
-              <Text style={styles.fotoOk}>✓ Foto registrada</Text>
-              <View style={styles.fotoRegistradaAcoes}>
-                <Pressable onPress={fluxo.tirarFotoUnica} hitSlop={8}>
-                  <Text style={styles.linkTirarNovo}>🔄 Tirar de novo</Text>
+        <View style={styles.listaFotosFixas}>
+          {passo.slots?.map((slot) => {
+            const foto = fluxo.fotos.find((f) => f.tipoFoto === slot.tipoFoto)
+            return foto ? (
+              <View key={slot.tipoFoto} style={styles.linhaFotoPronta}>
+                <Pressable onPress={() => setFotoAberta(foto.uriLocal)}>
+                  <Image source={{ uri: foto.uriLocal }} style={styles.miniatura} resizeMode="cover" />
                 </Pressable>
-                <Pressable onPress={fluxo.avancar} hitSlop={8}>
-                  <Text style={styles.linkContinuar}>Continuar →</Text>
-                </Pressable>
+                <View style={styles.linhaFotoInfo}>
+                  <Text style={styles.fotoOk}>✓ {slot.rotulo}</Text>
+                  <Pressable onPress={() => fluxo.tirarFotoSlot(slot.tipoFoto)} hitSlop={8}>
+                    <Text style={styles.linkTirarNovo}>🔄 Tirar de novo</Text>
+                  </Pressable>
+                </View>
               </View>
-            </View>
-          )
-        ) : (
-          <BotaoFoto onPress={fluxo.tirarFotoUnica} carregando={fluxo.capturando} texto={passo.textoBotao} />
-        )}
+            ) : (
+              <BotaoFoto
+                key={slot.tipoFoto}
+                onPress={() => fluxo.tirarFotoSlot(slot.tipoFoto)}
+                carregando={fluxo.capturando}
+                texto={slot.textoBotao}
+              />
+            )
+          })}
+        </View>
+
+        <Modal
+          visible={fotoAberta !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setFotoAberta(null)}
+        >
+          <Pressable style={styles.fundoModalFoto} onPress={() => setFotoAberta(null)}>
+            {fotoAberta && (
+              <Image source={{ uri: fotoAberta }} style={styles.fotoAmpliadaModal} resizeMode="contain" />
+            )}
+          </Pressable>
+        </Modal>
       </View>
     )
   }
@@ -188,10 +209,13 @@ const styles = StyleSheet.create({
   chipPressionado: { backgroundColor: '#f1f5f9' },
   chipTexto: { fontSize: 15, color: '#0f172a' },
   fotoOk: { color: '#0f766e', fontWeight: '700', fontSize: 15 },
-  fotoRegistradaLinha: { gap: 10 },
-  fotoRegistradaAcoes: { flexDirection: 'row', gap: 20 },
   linkTirarNovo: { color: '#64748b', fontWeight: '600', fontSize: 14 },
-  linkContinuar: { color: '#0d9488', fontWeight: '700', fontSize: 14 },
+  listaFotosFixas: { gap: 10 },
+  linhaFotoPronta: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  miniatura: { width: 56, height: 56, borderRadius: 10, backgroundColor: '#e2e8f0' },
+  linhaFotoInfo: { flex: 1, gap: 4 },
+  fundoModalFoto: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+  fotoAmpliadaModal: { width: '100%', height: '85%' },
   contador: { color: '#475569', fontSize: 13, marginBottom: 8 },
   dica: { color: '#94a3b8', fontSize: 12, marginTop: 8, fontStyle: 'italic' },
   botaoFoto: { alignSelf: 'flex-start', backgroundColor: '#0d9488', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 },
