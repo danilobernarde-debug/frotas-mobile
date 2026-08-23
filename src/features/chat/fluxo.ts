@@ -30,10 +30,14 @@ export function obterFluxo(categoria: CategoriaSolicitacao): DefinicaoPasso[] {
   const valor: DefinicaoPasso = { id: 'valor', tipo: 'valor', pergunta: 'Valor estimado (opcional)' }
   const confirmar: DefinicaoPasso = { id: 'confirmar', tipo: 'confirmar', pergunta: 'Confirmar envio' }
 
+  // Textos sempre antes das fotos -- em ambas as categorias, quem
+  // responde termina de descrever a solicitação antes de partir pra
+  // câmera, não o contrário.
   if (categoria === 'ABASTECIMENTO') {
     return [
       veiculo,
       km,
+      valor,
       {
         id: 'fotos_abastecimento',
         tipo: 'fotos_abastecimento',
@@ -44,7 +48,6 @@ export function obterFluxo(categoria: CategoriaSolicitacao): DefinicaoPasso[] {
           { tipoFoto: 'PLACA', rotulo: 'Placa do veículo', textoBotao: 'Tirar foto da placa' },
         ],
       },
-      valor,
       confirmar,
     ]
   }
@@ -53,8 +56,8 @@ export function obterFluxo(categoria: CategoriaSolicitacao): DefinicaoPasso[] {
   return [
     veiculo,
     { id: 'descricao', tipo: 'texto', pergunta: 'Descreva o problema' },
-    { id: 'fotos', tipo: 'foto_multipla', pergunta: 'Fotos do problema' },
     valor,
+    { id: 'fotos', tipo: 'foto_multipla', pergunta: 'Fotos do problema' },
     confirmar,
   ]
 }
