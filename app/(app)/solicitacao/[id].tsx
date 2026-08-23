@@ -21,6 +21,23 @@ const ROTULO_FOTO: Record<string, string> = {
   OUTRO: 'Foto',
 }
 
+/** <Image source={{ uri, headers }}> não manda o header Authorization de
+ *  forma confiável (achado em teste real: um fetch() com o mesmo token
+ *  pra mesma URL funciona -- 200, image/jpeg -- mas o Image nunca
+ *  carrega). Baixa os bytes na mão e converte pra data URI, que o Image
+ *  exibe sem precisar de nenhum header. */
+async function baixarComoDataUri(url: string, token: string): Promise<string> {
+  const resposta = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!resposta.ok) throw new Error(`Falha ao buscar foto (status ${resposta.status}).`)
+  const blob = await resposta.blob()
+  return await new Promise((resolve, reject) => {
+    const leitor = new FileReader()
+    leitor.onload = () => resolve(leitor.result as string)
+    leitor.onerror = () => reject(new Error('Falha ao ler a foto.'))
+    leitor.readAsDataURL(blob)
+  })
+}
+
 export default function TelaDetalheSolicitacao() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const router = useRouter()
@@ -28,6 +45,7 @@ export default function TelaDetalheSolicitacao() {
   const [anexos, setAnexos] = useState<AnexoAprovacao[]>([])
   const [token, setToken] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
+  const [fotosDataUri, setFotosDataUri] = useState<Record<number, string>>({})
 
   useEffect(() => {
     let cancelado = false
@@ -52,6 +70,27 @@ export default function TelaDetalheSolicitacao() {
       cancelado = true
     }
   }, [id])
+
+  // Roda só depois que anexos/token já chegaram -- busca cada foto por
+  // fora do Image (ver baixarComoDataUri) e guarda o resultado por id,
+  // pra cada uma aparecer assim que estiver pronta em vez de esperar
+  // todas juntas.
+  useEffect(() => {
+    if (anexos.length === 0 || !token) return
+    let cancelado = false
+    for (const a of anexos) {
+      baixarComoDataUri(urlAnexo('aprovacoes', a.id), token)
+        .then((dataUri) => {
+          if (!cancelado) setFotosDataUri((atual) => ({ ...atual, [a.id]: dataUri }))
+        })
+        .catch(() => {
+          // best-effort -- essa foto fica com o placeholder cinza, resto segue normal
+        })
+    }
+    return () => {
+      cancelado = true
+    }
+  }, [anexos, token])
 
   return (
     <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
@@ -101,20 +140,19 @@ export default function TelaDetalheSolicitacao() {
             </View>
           )}
 
-          {anexos.length > 0 && token && (
+          {anexos.length > 0 && (
             <>
               <Text style={styles.tituloFotos}>Fotos</Text>
               <View style={styles.grade}>
                 {anexos.map((a) => (
                   <View key={a.id} style={styles.fotoCartao}>
-                    <Image
-                      source={{
-                        uri: urlAnexo('aprovacoes', a.id),
-                        headers: { Authorization: `Bearer ${token}` },
-                      }}
-                      style={styles.foto}
-                      resizeMode="cover"
-                    />
+                    {fotosDataUri[a.id] ? (
+                      <Image source={{ uri: fotosDataUri[a.id] }} style={styles.foto} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.foto, styles.fotoCarregando]}>
+                        <ActivityIndicator size="small" />
+                      </View>
+                    )}
                     <Text style={styles.fotoLegenda}>{ROTULO_FOTO[a.tipo] ?? a.tipo}</Text>
                   </View>
                 ))}
@@ -154,5 +192,6 @@ const styles = StyleSheet.create({
   grade: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   fotoCartao: { width: '47%' },
   foto: { width: '100%', aspectRatio: 1, borderRadius: 10, backgroundColor: '#e2e8f0' },
+  fotoCarregando: { alignItems: 'center', justifyContent: 'center' },
   fotoLegenda: { fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center' },
 })
