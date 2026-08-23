@@ -74,7 +74,18 @@ export default function TelaNovoChecklist() {
   }
 
   return (
-    <SafeAreaView style={styles.tela} edges={['bottom']}>
+    <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
+      {/* Cabeçalho próprio, não o nativo do Stack -- o nativo não respeita
+          a área segura no Android em modo edge-to-edge, deixando o botão
+          de voltar sobreposto pela barra de status (achado em teste real
+          na tela de detalhe da solicitação, mesmo padrão aqui). */}
+      <View style={styles.cabecalho}>
+        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.botaoVoltar}>
+          <Text style={styles.iconeVoltar}>←</Text>
+        </Pressable>
+        <Text style={styles.tituloCabecalho}>Novo checklist</Text>
+      </View>
+
       <ScrollView contentContainerStyle={styles.conteudo}>
         <Text style={styles.rotulo}>Veículo</Text>
         <View style={styles.listaVeiculos}>
@@ -170,6 +181,19 @@ function OpcaoValor({
 
 const styles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: '#f8fafc' },
+  cabecalho: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  botaoVoltar: { padding: 6 },
+  iconeVoltar: { fontSize: 22, color: '#0f172a', fontWeight: '600' },
+  tituloCabecalho: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   conteudo: { padding: 16, paddingBottom: 24 },
   rotulo: { fontSize: 13, fontWeight: '700', color: '#334155', marginTop: 14, marginBottom: 6 },
   listaVeiculos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

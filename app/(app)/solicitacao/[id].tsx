@@ -1,6 +1,7 @@
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { data as fmtData, moeda } from '../../../src/lib/formato'
 import { urlAnexo } from '../../../src/lib/api'
 import { supabase } from '../../../src/lib/supabase'
@@ -22,6 +23,7 @@ const ROTULO_FOTO: Record<string, string> = {
 
 export default function TelaDetalheSolicitacao() {
   const { id } = useLocalSearchParams<{ id: string }>()
+  const router = useRouter()
   const [aprovacao, setAprovacao] = useState<Aprovacao | null>(null)
   const [anexos, setAnexos] = useState<AnexoAprovacao[]>([])
   const [token, setToken] = useState<string | null>(null)
@@ -51,68 +53,95 @@ export default function TelaDetalheSolicitacao() {
     }
   }, [id])
 
-  if (carregando) {
-    return (
-      <View style={styles.centro}>
-        <ActivityIndicator />
-      </View>
-    )
-  }
-
-  if (!aprovacao) {
-    return (
-      <View style={styles.centro}>
-        <Text style={styles.textoVazio}>Solicitação não encontrada.</Text>
-      </View>
-    )
-  }
-
   return (
-    <ScrollView style={styles.tela} contentContainerStyle={styles.conteudo}>
-      <Text style={styles.status}>{ROTULO_STATUS[aprovacao.status]}</Text>
-      <Text style={styles.servico}>{aprovacao.servico}</Text>
+    <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
+      {/* Cabeçalho próprio (não o nativo do Stack) -- mesma razão das
+          outras telas desde a Fase H: o nativo não respeita a área
+          segura no Android em modo edge-to-edge, o que deixava o botão
+          de voltar sobreposto pela barra de status e, na prática,
+          difícil de tocar direito (achado em teste real). */}
+      <View style={styles.cabecalho}>
+        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.botaoVoltar}>
+          <Text style={styles.iconeVoltar}>←</Text>
+        </Pressable>
+        <Text style={styles.tituloCabecalho}>Solicitação</Text>
+      </View>
 
-      <View style={styles.linha}>
-        <Text style={styles.rotulo}>Veículo</Text>
-        <Text style={styles.valor}>{aprovacao.veiculo?.placa ?? '—'}</Text>
-      </View>
-      <View style={styles.linha}>
-        <Text style={styles.rotulo}>Data</Text>
-        <Text style={styles.valor}>{fmtData(aprovacao.data)}</Text>
-      </View>
-      {aprovacao.valor > 0 && (
-        <View style={styles.linha}>
-          <Text style={styles.rotulo}>Valor</Text>
-          <Text style={styles.valor}>{moeda(aprovacao.valor)}</Text>
+      {carregando ? (
+        <View style={styles.centro}>
+          <ActivityIndicator />
         </View>
-      )}
+      ) : !aprovacao ? (
+        <View style={styles.centro}>
+          <Text style={styles.textoVazio}>Solicitação não encontrada.</Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.tela} contentContainerStyle={styles.conteudo}>
+          <Text style={styles.status}>{ROTULO_STATUS[aprovacao.status]}</Text>
+          <Text style={styles.servico}>{aprovacao.servico}</Text>
 
-      {anexos.length > 0 && token && (
-        <>
-          <Text style={styles.tituloFotos}>Fotos</Text>
-          <View style={styles.grade}>
-            {anexos.map((a) => (
-              <View key={a.id} style={styles.fotoCartao}>
-                <Image
-                  source={{
-                    uri: urlAnexo('aprovacoes', a.id),
-                    headers: { Authorization: `Bearer ${token}` },
-                  }}
-                  style={styles.foto}
-                  resizeMode="cover"
-                />
-                <Text style={styles.fotoLegenda}>{ROTULO_FOTO[a.tipo] ?? a.tipo}</Text>
-              </View>
-            ))}
+          <View style={styles.linha}>
+            <Text style={styles.rotulo}>Veículo</Text>
+            <Text style={styles.valor}>{aprovacao.veiculo?.placa ?? '—'}</Text>
           </View>
-        </>
+          <View style={styles.linha}>
+            <Text style={styles.rotulo}>Data</Text>
+            <Text style={styles.valor}>{fmtData(aprovacao.data)}</Text>
+          </View>
+          {aprovacao.odometro != null && (
+            <View style={styles.linha}>
+              <Text style={styles.rotulo}>KM</Text>
+              <Text style={styles.valor}>{aprovacao.odometro.toLocaleString('pt-BR')}</Text>
+            </View>
+          )}
+          {aprovacao.valor > 0 && (
+            <View style={styles.linha}>
+              <Text style={styles.rotulo}>Valor</Text>
+              <Text style={styles.valor}>{moeda(aprovacao.valor)}</Text>
+            </View>
+          )}
+
+          {anexos.length > 0 && token && (
+            <>
+              <Text style={styles.tituloFotos}>Fotos</Text>
+              <View style={styles.grade}>
+                {anexos.map((a) => (
+                  <View key={a.id} style={styles.fotoCartao}>
+                    <Image
+                      source={{
+                        uri: urlAnexo('aprovacoes', a.id),
+                        headers: { Authorization: `Bearer ${token}` },
+                      }}
+                      style={styles.foto}
+                      resizeMode="cover"
+                    />
+                    <Text style={styles.fotoLegenda}>{ROTULO_FOTO[a.tipo] ?? a.tipo}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+        </ScrollView>
       )}
-    </ScrollView>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: '#f8fafc' },
+  cabecalho: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  botaoVoltar: { padding: 6 },
+  iconeVoltar: { fontSize: 22, color: '#0f172a', fontWeight: '600' },
+  tituloCabecalho: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   conteudo: { padding: 16 },
   centro: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   textoVazio: { color: '#94a3b8' },

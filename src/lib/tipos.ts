@@ -37,6 +37,7 @@ export interface Aprovacao {
   regional_id: number | null
   servico: string
   valor: number
+  odometro: number | null
   justificativa: string | null
   categoria: CategoriaSolicitacao | null
   status: StatusAprovacao
