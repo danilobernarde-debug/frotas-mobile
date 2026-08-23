@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { hora } from '../../lib/formato'
 import { StatusBadge } from './StatusBadge'
 import type { EntradaChat } from './types'
 
@@ -31,6 +32,7 @@ export function BolhaSolicitacao({ entrada }: { entrada: EntradaChat & { tipo: '
         {a.valor > 0 && <Text style={styles.valor}>{moeda(a.valor)}</Text>}
         <View style={styles.rodape}>
           <StatusBadge entrada={entrada} />
+          <Text style={styles.horario}>{hora(entrada.criadoEm)}</Text>
         </View>
       </Pressable>
     )
@@ -54,6 +56,7 @@ export function BolhaSolicitacao({ entrada }: { entrada: EntradaChat & { tipo: '
       )}
       <View style={styles.rodape}>
         <StatusBadge entrada={entrada} />
+        <Text style={styles.horario}>{hora(entrada.criadoEm)}</Text>
       </View>
     </View>
   )
@@ -79,5 +82,6 @@ const styles = StyleSheet.create({
   valor: { fontSize: 13, color: '#475569', marginTop: 4, fontWeight: '600' },
   fotos: { fontSize: 12, color: '#64748b', marginTop: 4 },
   erroMsg: { fontSize: 12, color: '#be123c', marginTop: 4 },
-  rodape: { marginTop: 8, flexDirection: 'row' },
+  rodape: { marginTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  horario: { fontSize: 10, color: '#94a3b8' },
 })

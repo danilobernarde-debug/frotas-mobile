@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth/useAuth'
+import { hora } from '../../lib/formato'
 import type { EntradaChat } from './types'
 
 /**
@@ -27,6 +28,9 @@ export function BolhaMensagem({ entrada }: { entrada: EntradaChat & { tipo: 'men
         </Text>
         <View style={[styles.bolha, minhaPropria ? styles.bolhaPropria : styles.bolhaOutro]}>
           <Text style={minhaPropria ? styles.textoProprio : styles.textoOutro}>{m.texto}</Text>
+          <Text style={minhaPropria ? styles.horarioProprio : styles.horarioOutro}>
+            {hora(entrada.criadoEm)}
+          </Text>
         </View>
       </View>
     )
@@ -43,6 +47,7 @@ export function BolhaMensagem({ entrada }: { entrada: EntradaChat & { tipo: 'men
         <Text style={styles.textoProprio}>{item.payload.texto}</Text>
         {item.permanente && item.erroMsg && <Text style={styles.erroMsg}>{item.erroMsg}</Text>}
         <Text style={styles.status}>
+          {hora(entrada.criadoEm)} ·{' '}
           {item.status === 'enviando'
             ? 'Enviando…'
             : item.permanente
@@ -67,6 +72,8 @@ const styles = StyleSheet.create({
   bolhaLocal: { opacity: 0.7 },
   textoOutro: { fontSize: 15, color: '#1e293b' },
   textoProprio: { fontSize: 15, color: '#fff' },
+  horarioOutro: { fontSize: 10, color: '#94a3b8', marginTop: 3, textAlign: 'right' },
+  horarioProprio: { fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 3, textAlign: 'right' },
   erroMsg: { fontSize: 12, color: '#fecaca', marginTop: 4 },
   status: { fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 3 },
 })
