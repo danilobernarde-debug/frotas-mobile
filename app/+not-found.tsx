@@ -7,7 +7,7 @@ export default function NaoEncontrado() {
       <Stack.Screen options={{ title: 'Não encontrado' }} />
       <View style={styles.container}>
         <Text style={styles.texto}>Esta tela não existe.</Text>
-        <Link href="/(app)/(tabs)/chat" style={styles.link}>
+        <Link href="/(app)/menu" style={styles.link}>
           Voltar pro início
         </Link>
       </View>

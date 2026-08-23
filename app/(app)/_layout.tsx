@@ -43,7 +43,9 @@ export default function LayoutApp() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="menu" />
+      <Stack.Screen name="chat" />
+      <Stack.Screen name="checklists" />
       <Stack.Screen
         name="solicitacao/[id]"
         options={{ headerShown: true, title: 'Solicitação', presentation: 'card' }}

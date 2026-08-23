@@ -13,7 +13,7 @@ export default function LayoutAuth() {
     )
   }
 
-  if (sessao) return <Redirect href="/(app)/(tabs)/chat" />
+  if (sessao) return <Redirect href="/(app)/menu" />
 
   return <Stack screenOptions={{ headerShown: false }} />
 }

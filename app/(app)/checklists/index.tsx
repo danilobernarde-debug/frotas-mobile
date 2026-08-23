@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router'
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { data as fmtData } from '../../../../src/lib/formato'
-import { useMeusChecklists, type EntradaChecklist } from '../../../../src/features/checklists/useMeusChecklists'
+import { useMeusChecklists, type EntradaChecklist } from '../../../src/features/checklists/useMeusChecklists'
+import { data as fmtData } from '../../../src/lib/formato'
+import { CabecalhoApp } from '../../../src/ui/CabecalhoApp'
 
 function ItemChecklist({ entrada }: { entrada: EntradaChecklist }) {
   if (entrada.fonte === 'servidor') {
@@ -37,10 +38,12 @@ export default function TelaChecklists() {
 
   return (
     <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
-      <View style={styles.cabecalho}>
+      <CabecalhoApp mostrarVoltar />
+
+      <View style={styles.barraAcao}>
         <Text style={styles.titulo}>Checklists</Text>
         <Pressable
-          onPress={() => router.push('/(app)/(tabs)/checklists/novo')}
+          onPress={() => router.push('/(app)/checklists/novo')}
           style={styles.botaoNovo}
         >
           <Text style={styles.botaoNovoTexto}>+ Novo</Text>
@@ -67,7 +70,7 @@ export default function TelaChecklists() {
 
 const styles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: '#f8fafc' },
-  cabecalho: {
+  barraAcao: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',

@@ -10,12 +10,12 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useItensChecklist } from '../../../../src/features/checklists/useItensChecklist'
-import { useVeiculos } from '../../../../src/features/veiculos/useVeiculos'
-import type { Veiculo } from '../../../../src/lib/tipos'
-import { TIPO_CHECKLIST, type ChecklistPayload, type RespostaPayload } from '../../../../src/outbox/handlers/checklist'
-import { enfileirar } from '../../../../src/outbox/outbox'
-import { runSync } from '../../../../src/outbox/syncEngine'
+import { useItensChecklist } from '../../../src/features/checklists/useItensChecklist'
+import { useVeiculos } from '../../../src/features/veiculos/useVeiculos'
+import type { Veiculo } from '../../../src/lib/tipos'
+import { TIPO_CHECKLIST, type ChecklistPayload, type RespostaPayload } from '../../../src/outbox/handlers/checklist'
+import { enfileirar } from '../../../src/outbox/outbox'
+import { runSync } from '../../../src/outbox/syncEngine'
 
 type Valor = 'sim' | 'nao' | 'na' | null
 
