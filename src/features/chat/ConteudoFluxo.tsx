@@ -39,7 +39,22 @@ export function ConteudoFluxo({ fluxo }: { fluxo: FluxoSolicitacao }) {
       <View style={styles.bloco}>
         <Bolha texto={passo.pergunta} />
         {jaTem ? (
-          <Text style={styles.fotoOk}>✓ Foto registrada</Text>
+          // Só aparece assim ao voltar pra um passo cuja foto já tinha
+          // sido tirada -- na 1ª vez, tirarFotoUnica() já avança sozinho
+          // pro próximo passo, então nunca fica parado aqui. Sem os dois
+          // botões, "voltar" virava beco sem saída: nenhuma ação levava
+          // pra frente de novo.
+          <View style={styles.fotoRegistradaLinha}>
+            <Text style={styles.fotoOk}>✓ Foto registrada</Text>
+            <View style={styles.fotoRegistradaAcoes}>
+              <Pressable onPress={fluxo.tirarFotoUnica} hitSlop={8}>
+                <Text style={styles.linkTirarNovo}>🔄 Tirar de novo</Text>
+              </Pressable>
+              <Pressable onPress={fluxo.avancar} hitSlop={8}>
+                <Text style={styles.linkContinuar}>Continuar →</Text>
+              </Pressable>
+            </View>
+          </View>
         ) : (
           <BotaoFoto onPress={fluxo.tirarFotoUnica} carregando={fluxo.capturando} />
         )}
@@ -135,6 +150,10 @@ const styles = StyleSheet.create({
   chipPressionado: { backgroundColor: '#f1f5f9' },
   chipTexto: { fontSize: 15, color: '#0f172a' },
   fotoOk: { color: '#0f766e', fontWeight: '700', fontSize: 15 },
+  fotoRegistradaLinha: { gap: 10 },
+  fotoRegistradaAcoes: { flexDirection: 'row', gap: 20 },
+  linkTirarNovo: { color: '#64748b', fontWeight: '600', fontSize: 14 },
+  linkContinuar: { color: '#0d9488', fontWeight: '700', fontSize: 14 },
   contador: { color: '#475569', fontSize: 13, marginBottom: 8 },
   dica: { color: '#94a3b8', fontSize: 12, marginTop: 8, fontStyle: 'italic' },
   botaoFoto: { alignSelf: 'flex-start', backgroundColor: '#0d9488', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 },

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { capturarFoto } from '../../camera/capturarFoto'
-import { obterLocalizacaoAtual } from '../../lib/localizacao'
+import { obterLocalizacaoAtual, type LocalCapturado } from '../../lib/localizacao'
 import type { CategoriaSolicitacao, Veiculo } from '../../lib/tipos'
 import { TIPO_NOVA_SOLICITACAO, type FotoPayload, type NovaSolicitacaoPayload } from '../../outbox/handlers/novaSolicitacao'
 import { enfileirar } from '../../outbox/outbox'
@@ -40,6 +40,27 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
   const [fotos, setFotos] = useState<FotoCapturada[]>([])
   const [capturando, setCapturando] = useState(false)
   const [enviando, setEnviando] = useState(false)
+
+  // Dispara assim que o roteiro de abastecimento começa -- antes até do
+  // veículo/KM serem escolhidos, não só depois da 1ª foto. Duas razões:
+  // (1) dá tempo de sobra pra já estar resolvido quando chegar nas fotos
+  // (o usuário ainda vai escolher veículo e digitar KM antes disso); (2)
+  // principalmente, evita pedir permissão de localização logo depois que
+  // a câmera fecha -- no Expo Go isso trava o diálogo do sistema pra
+  // sempre (bug real visto em teste, tanto Android quanto iOS). Uma
+  // chamada só, reaproveitada pelas 3 fotos: é o mesmo local no mesmo
+  // minuto, não faz sentido buscar de novo a cada uma. `iniciada` (não só
+  // o dependency array) evita disparar de novo no duplo-mount que o modo
+  // de desenvolvimento do React faz de propósito (confirmado em teste:
+  // sem essa guarda, obterLocalizacaoAtual() rodava 2x em paralelo).
+  const localizacaoPromise = useRef<Promise<LocalCapturado | null> | null>(null)
+  const localizacaoIniciada = useRef(false)
+  useEffect(() => {
+    if (categoria === 'ABASTECIMENTO' && !localizacaoIniciada.current) {
+      localizacaoIniciada.current = true
+      localizacaoPromise.current = obterLocalizacaoAtual()
+    }
+  }, [categoria])
 
   const passo = passos[passoAtual]
 
@@ -83,12 +104,12 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
       return
     }
     // Carimba no momento da captura, não do envio -- importa num app
-    // offline-first, onde a foto pode subir horas depois. Só chama
-    // obterLocalizacaoAtual() (pode levar alguns segundos) depois de
-    // confirmar que o usuário não cancelou a foto, pra não pagar a
-    // espera do GPS à toa.
+    // offline-first, onde a foto pode subir horas depois. A localização
+    // já foi disparada lá no início do roteiro (useEffect acima) -- aqui
+    // só espera o que já estava em andamento, nunca inicia um pedido novo
+    // logo depois da câmera fechar.
     const capturadaEm = new Date().toISOString()
-    const local = await obterLocalizacaoAtual()
+    const local = await (localizacaoPromise.current ?? Promise.resolve(null))
     setCapturando(false)
     const tipoFoto = passo.tipoFoto
     setFotos((atual) => [
@@ -158,6 +179,7 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
     podeConfirmar,
     escolherVeiculo,
     enviarTexto,
+    avancar,
     tirarFotoUnica,
     tirarFotoMultipla,
     enviarSolicitacao,
