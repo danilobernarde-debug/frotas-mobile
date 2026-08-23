@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useVeiculos } from '../veiculos/useVeiculos'
 import type { FluxoSolicitacao } from './useFluxoSolicitacao'
 
@@ -10,14 +11,36 @@ import type { FluxoSolicitacao } from './useFluxoSolicitacao'
 export function ConteudoFluxo({ fluxo }: { fluxo: FluxoSolicitacao }) {
   const { veiculos } = useVeiculos()
   const { passo } = fluxo
+  const [buscaVeiculo, setBuscaVeiculo] = useState('')
 
   if (passo.tipo === 'veiculo') {
+    const filtro = buscaVeiculo.trim().toLowerCase()
+    const veiculosFiltrados = filtro
+      ? veiculos.filter(
+          (v) => v.placa.toLowerCase().includes(filtro) || v.modelo.toLowerCase().includes(filtro),
+        )
+      : veiculos
+
     return (
       <View style={styles.bloco}>
         <Bolha texto={passo.pergunta} />
+        {veiculos.length > 0 && (
+          <TextInput
+            style={styles.buscaVeiculo}
+            value={buscaVeiculo}
+            onChangeText={setBuscaVeiculo}
+            placeholder="Buscar por placa ou modelo…"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        )}
         <View style={styles.listaVeiculos}>
           {veiculos.length === 0 && <Text style={styles.vazio}>Nenhum veículo disponível.</Text>}
-          {veiculos.map((v) => (
+          {veiculos.length > 0 && veiculosFiltrados.length === 0 && (
+            <Text style={styles.vazio}>Nenhum veículo encontrado.</Text>
+          )}
+          {veiculosFiltrados.map((v) => (
             <Pressable
               key={v.id}
               onPress={() => fluxo.escolherVeiculo(v)}
@@ -144,6 +167,17 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   bolhaPerguntaTexto: { fontSize: 15, color: '#1e293b', fontWeight: '600' },
+  buscaVeiculo: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 44,
+    fontSize: 16,
+    backgroundColor: '#fff',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
   listaVeiculos: { gap: 6 },
   vazio: { color: '#94a3b8', fontStyle: 'italic' },
   chip: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 14 },
