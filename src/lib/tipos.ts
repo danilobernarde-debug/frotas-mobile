@@ -92,6 +92,7 @@ export interface Mensagem {
   texto: string
   origem_local_id: string | null
   respondendo_a: number | null
+  respondendo_aprovacao_id: number | null
   criado_em: string
   autor?: Pick<Perfil, 'id' | 'nome'> | null
 }

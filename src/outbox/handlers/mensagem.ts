@@ -7,8 +7,12 @@ export interface MensagemPayload {
   texto: string
   /** Id (do servidor) da mensagem sendo respondida, estilo WhatsApp.
    *  Só mensagens já sincronizadas têm esse id -- não dá pra responder
-   *  uma que ainda está só na fila local. */
+   *  uma que ainda está só na fila local. Nunca junto com
+   *  respondendoAprovacaoId -- é um ou outro. */
   respondendoA?: number
+  /** Id da solicitação (abastecimento/manutenção) sendo respondida,
+   *  quando a resposta é sobre uma solicitação em vez de uma mensagem. */
+  respondendoAprovacaoId?: number
 }
 
 export const TIPO_MENSAGEM = 'MENSAGEM'
@@ -31,6 +35,7 @@ async function enviar(
     encarregado_id: sessao.session.user.id,
     texto: payload.texto,
     respondendo_a: payload.respondendoA ?? null,
+    respondendo_aprovacao_id: payload.respondendoAprovacaoId ?? null,
     origem_local_id: ctx.itemId,
   })
 

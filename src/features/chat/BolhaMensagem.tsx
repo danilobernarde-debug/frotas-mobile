@@ -1,7 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native'
 import { useAuth } from '../../auth/useAuth'
 import { hora } from '../../lib/formato'
-import type { Mensagem } from '../../lib/tipos'
 import type { EntradaChat, RespondendoA } from './types'
 
 /**
@@ -15,20 +14,28 @@ import type { EntradaChat, RespondendoA } from './types'
  * Mostra o nome de quem escreveu em toda mensagem, dos dois lados -- não
  * só nas respostas da gestão.
  *
- * `citada`/`aoResponder`: suporte a responder uma mensagem específica,
- * estilo WhatsApp -- toque longo numa bolha já sincronizada marca ela
- * como "respondendo a" (ver chat.tsx); mensagens locais (fonte==='local',
- * ainda sem id de servidor) não podem ser citadas, por isso não recebem
- * `aoResponder`.
+ * `citacao`/`aoResponder`/`aoIrParaOriginal`: suporte a responder uma
+ * mensagem ou solicitação específica, estilo WhatsApp -- toque longo
+ * numa bolha já sincronizada abre um menu suspenso (ver chat.tsx, que
+ * decide o que mostrar nele -- hoje só "Responder" -- e resolve
+ * `citacao`, que pode ser outra mensagem ou uma solicitação;
+ * `BolhaMensagem` não precisa saber qual); tocar na prévia da citação
+ * rola até o item original. Mensagens locais (fonte==='local', ainda
+ * sem id de servidor) não podem ser citadas nem respondidas, por isso
+ * não recebem essas props.
  */
 export function BolhaMensagem({
   entrada,
-  citada,
+  citacao,
   aoResponder,
+  aoIrParaOriginal,
+  destacada,
 }: {
   entrada: EntradaChat & { tipo: 'mensagem' }
-  citada?: Mensagem
-  aoResponder?: (r: RespondendoA) => void
+  citacao?: { titulo: string; texto: string; alvoId: string }
+  aoResponder?: (r: RespondendoA, evento: GestureResponderEvent) => void
+  aoIrParaOriginal?: (alvoId: string) => void
+  destacada?: boolean
 }) {
   const { perfil } = useAuth()
 
@@ -36,11 +43,6 @@ export function BolhaMensagem({
     const m = entrada.mensagem
     const minhaPropria = m.autor_id === perfil?.id
     const nomeAutor = minhaPropria ? (perfil?.nome ?? 'Você') : (m.autor?.nome ?? 'Gestão de frotas')
-    const nomeCitado = citada
-      ? citada.autor_id === perfil?.id
-        ? (perfil?.nome ?? 'Você')
-        : (citada.autor?.nome ?? 'Gestão de frotas')
-      : null
     return (
       <View style={[styles.linha, minhaPropria ? styles.linhaDireita : styles.linhaEsquerda]}>
         <Text style={[styles.autor, minhaPropria ? styles.autorDireita : styles.autorEsquerda]}>
@@ -48,22 +50,31 @@ export function BolhaMensagem({
         </Text>
         <Pressable
           onLongPress={
-            aoResponder && (() => aoResponder({ id: m.id, autorNome: nomeAutor, texto: m.texto }))
+            aoResponder &&
+            ((evento) =>
+              aoResponder({ tipo: 'mensagem', id: m.id, titulo: nomeAutor, texto: m.texto }, evento))
           }
-          style={[styles.bolha, minhaPropria ? styles.bolhaPropria : styles.bolhaOutro]}
+          style={[
+            styles.bolha,
+            minhaPropria ? styles.bolhaPropria : styles.bolhaOutro,
+            destacada && styles.bolhaDestacada,
+          ]}
         >
-          {citada && (
-            <View style={[styles.citacao, minhaPropria ? styles.citacaoPropria : styles.citacaoOutro]}>
+          {citacao && (
+            <Pressable
+              onPress={() => aoIrParaOriginal?.(citacao.alvoId)}
+              style={[styles.citacao, minhaPropria ? styles.citacaoPropria : styles.citacaoOutro]}
+            >
               <Text style={[styles.citacaoAutor, minhaPropria && styles.citacaoAutorProprio]}>
-                {nomeCitado}
+                {citacao.titulo}
               </Text>
               <Text
                 style={[styles.citacaoTexto, minhaPropria && styles.citacaoTextoProprio]}
                 numberOfLines={1}
               >
-                {citada.texto}
+                {citacao.texto}
               </Text>
-            </View>
+            </Pressable>
           )}
           <Text style={minhaPropria ? styles.textoProprio : styles.textoOutro}>{m.texto}</Text>
           <Text style={minhaPropria ? styles.horarioProprio : styles.horarioOutro}>
@@ -108,6 +119,7 @@ const styles = StyleSheet.create({
   bolhaOutro: { backgroundColor: '#e2e8f0', borderBottomLeftRadius: 4 },
   bolhaPropria: { backgroundColor: '#0d9488', borderBottomRightRadius: 4 },
   bolhaLocal: { opacity: 0.7 },
+  bolhaDestacada: { borderWidth: 2, borderColor: '#0d9488' },
   citacao: {
     borderLeftWidth: 2,
     borderRadius: 6,

@@ -9,20 +9,23 @@ import {
   StyleSheet,
   Text,
   View,
+  type GestureResponderEvent,
   type ViewToken,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useAuth } from '../../src/auth/useAuth'
 import { BarraEntrada } from '../../src/features/chat/BarraEntrada'
 import { BolhaMensagem } from '../../src/features/chat/BolhaMensagem'
-import { BolhaSolicitacao } from '../../src/features/chat/BolhaSolicitacao'
+import { BolhaSolicitacao, ROTULO_CATEGORIA } from '../../src/features/chat/BolhaSolicitacao'
 import { ConteudoFluxo } from '../../src/features/chat/ConteudoFluxo'
 import { inserirDivisoresData } from '../../src/features/chat/divisoresData'
+import { MenuAcoesMensagem } from '../../src/features/chat/MenuAcoesMensagem'
 import type { EntradaChat, RespondendoA } from '../../src/features/chat/types'
 import { useDivisorNaoLidas } from '../../src/features/chat/useDivisorNaoLidas'
 import { useFluxoSolicitacao } from '../../src/features/chat/useFluxoSolicitacao'
 import { useMinhasSolicitacoes } from '../../src/features/chat/useMinhasSolicitacoes'
 import { diaRelativo } from '../../src/lib/formato'
-import type { CategoriaSolicitacao, Mensagem } from '../../src/lib/tipos'
+import type { Aprovacao, CategoriaSolicitacao, Mensagem } from '../../src/lib/tipos'
 import { useNetworkStatus } from '../../src/net/useNetworkStatus'
 import { useSyncStatus } from '../../src/outbox/useSyncStatus'
 import { CabecalhoApp } from '../../src/ui/CabecalhoApp'
@@ -73,6 +76,7 @@ function SecaoFluxo({
 }
 
 export default function TelaChat() {
+  const { perfil } = useAuth()
   const { entradas, carregando, recarregar } = useMinhasSolicitacoes()
   const entradasComDivisor = useDivisorNaoLidas(inserirDivisoresData(entradas))
   const { pendentes, sincronizando } = useSyncStatus()
@@ -80,16 +84,83 @@ export default function TelaChat() {
 
   const [fluxoInfo, setFluxoInfo] = useState<{ categoria: CategoriaSolicitacao; chave: number } | null>(null)
   const [respondendoA, setRespondendoA] = useState<RespondendoA | null>(null)
+  // Menu suspenso estilo WhatsApp aberto por toque longo -- guarda o alvo
+  // (mensagem ou solicitação) e o ponto da tela onde o dedo tocou, pra
+  // MenuAcoesMensagem se posicionar perto dali.
+  const [menuAberto, setMenuAberto] = useState<{ alvo: RespondendoA; ponto: { x: number; y: number } } | null>(
+    null,
+  )
+  // Item (id de EntradaChat) que deve piscar um destaque agora, depois de
+  // um toque em "ir pra mensagem original" -- some sozinho.
+  const [destacado, setDestacado] = useState<string | null>(null)
+  const timeoutDestaque = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Pra mostrar a prévia de "respondendo a: ..." dentro da bolha sem
-  // precisar de mais uma consulta -- respondendo_a é só um id, e todas as
-  // mensagens do servidor já estão carregadas aqui.
+  // Pra mostrar a prévia de "respondendo a: ..." sem precisar de mais uma
+  // consulta -- respondendo_a/respondendo_aprovacao_id são só ids, e tudo
+  // que pode ser citado já está carregado aqui.
   const mensagensPorId = new Map<number, Mensagem>()
+  const aprovacoesPorId = new Map<number, Aprovacao>()
   for (const e of entradas) {
     if (e.tipo === 'mensagem' && e.fonte === 'servidor') mensagensPorId.set(e.mensagem.id, e.mensagem)
+    if (e.tipo === 'solicitacao' && e.fonte === 'servidor') aprovacoesPorId.set(e.aprovacao.id, e.aprovacao)
   }
+
+  /** Resolve o que uma mensagem está respondendo (se algo) pra prévia
+   *  tocável dentro da bolha -- null se não responde nada, ou se o alvo
+   *  citado não está (mais) carregado nesta thread. */
+  function resolverCitacao(m: Mensagem): { titulo: string; texto: string; alvoId: string } | null {
+    if (m.respondendo_a != null) {
+      const citada = mensagensPorId.get(m.respondendo_a)
+      if (!citada) return null
+      const nomeCitado = citada.autor_id === perfil?.id ? (perfil?.nome ?? 'Você') : (citada.autor?.nome ?? 'Gestão de frotas')
+      return { titulo: nomeCitado, texto: citada.texto, alvoId: `servidor-msg-${citada.id}` }
+    }
+    if (m.respondendo_aprovacao_id != null) {
+      const citada = aprovacoesPorId.get(m.respondendo_aprovacao_id)
+      if (!citada) return null
+      const rotulo = ROTULO_CATEGORIA[citada.categoria ?? 'OUTRO']
+      return {
+        titulo: `${rotulo} — ${citada.veiculo?.placa ?? '—'}`,
+        texto: citada.servico,
+        alvoId: `servidor-${citada.id}`,
+      }
+    }
+    return null
+  }
+
   const proximaChave = useRef(0)
   const listaRef = useRef<FlatList<EntradaChat>>(null)
+
+  /** Rola até o item original a partir de um toque na citação -- sem
+   *  getItemLayout (os itens têm alturas bem diferentes: divisor, bolha
+   *  de 1 linha, cartão de solicitação inteiro), scrollToIndex sozinho
+   *  não é confiável pra itens fora da janela renderizada; o próprio
+   *  React Native recomenda esse fallback em onScrollToIndexFailed. */
+  function irPara(alvoId: string) {
+    const indice = entradasComDivisor.findIndex((e) => e.id === alvoId)
+    if (indice === -1) return
+    listaRef.current?.scrollToIndex({ index: indice, animated: true })
+    destacar(alvoId)
+  }
+
+  /** Toque longo numa bolha não marca a resposta direto -- abre o menu
+   *  suspenso (estilo WhatsApp) perto do ponto tocado; quem confirma
+   *  "Responder" ali é que chama setRespondendoA. */
+  function aoTocarLongo(alvo: RespondendoA, evento: GestureResponderEvent) {
+    const { pageX, pageY } = evento.nativeEvent
+    setMenuAberto({ alvo, ponto: { x: pageX, y: pageY } })
+  }
+
+  function destacar(alvoId: string) {
+    setDestacado(alvoId)
+    if (timeoutDestaque.current) clearTimeout(timeoutDestaque.current)
+    timeoutDestaque.current = setTimeout(() => setDestacado(null), 1500)
+  }
+
+  function aoFalharScrollParaIndice(info: { index: number; averageItemLength: number }) {
+    listaRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false })
+    setTimeout(() => listaRef.current?.scrollToIndex({ index: info.index, animated: true }), 150)
+  }
   // Rola pro final só na 1ª vez que a lista ganha conteúdo -- ao abrir o
   // chat, as mensagens mais recentes já aparecem na tela, sem precisar
   // arrastar (igual WhatsApp). Só uma vez: atualizações depois (poll,
@@ -121,6 +192,7 @@ export default function TelaChat() {
   useEffect(() => {
     return () => {
       if (timeoutSeloData.current) clearTimeout(timeoutSeloData.current)
+      if (timeoutDestaque.current) clearTimeout(timeoutDestaque.current)
     }
   }, [])
 
@@ -183,19 +255,21 @@ export default function TelaChat() {
               ) : item.tipo === 'mensagem' ? (
                 <BolhaMensagem
                   entrada={item}
-                  citada={
-                    item.fonte === 'servidor' && item.mensagem.respondendo_a != null
-                      ? mensagensPorId.get(item.mensagem.respondendo_a)
-                      : undefined
-                  }
+                  citacao={item.fonte === 'servidor' ? (resolverCitacao(item.mensagem) ?? undefined) : undefined}
                   // Só mensagens já sincronizadas (fonte==='servidor') têm
                   // id de servidor pra citar -- uma ainda só na fila local
                   // não pode ser respondida (decisão do pedido: não
                   // precisa cobrir esse caso).
-                  aoResponder={item.fonte === 'servidor' ? setRespondendoA : undefined}
+                  aoResponder={item.fonte === 'servidor' ? aoTocarLongo : undefined}
+                  aoIrParaOriginal={irPara}
+                  destacada={destacado === item.id}
                 />
               ) : (
-                <BolhaSolicitacao entrada={item} />
+                <BolhaSolicitacao
+                  entrada={item}
+                  aoResponder={item.fonte === 'servidor' ? aoTocarLongo : undefined}
+                  destacada={destacado === item.id}
+                />
               )
             }
             contentContainerStyle={{ paddingVertical: 12, flexGrow: 1 }}
@@ -204,6 +278,7 @@ export default function TelaChat() {
             scrollEventThrottle={100}
             onViewableItemsChanged={aoMudarItensVisiveis}
             viewabilityConfig={configuracaoVisibilidade}
+            onScrollToIndexFailed={aoFalharScrollParaIndice}
             ListEmptyComponent={
               !carregando && !fluxoInfo ? (
                 <View style={styles.vazio}>
@@ -248,6 +323,15 @@ export default function TelaChat() {
           />
         )}
       </KeyboardAvoidingView>
+
+      <MenuAcoesMensagem
+        visivel={menuAberto !== null}
+        ponto={menuAberto?.ponto ?? null}
+        itens={
+          menuAberto ? [{ rotulo: '↩ Responder', aoTocar: () => setRespondendoA(menuAberto.alvo) }] : []
+        }
+        onFechar={() => setMenuAberto(null)}
+      />
     </SafeAreaView>
   )
 }

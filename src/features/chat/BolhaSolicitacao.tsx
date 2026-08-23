@@ -1,10 +1,10 @@
 import { useRouter } from 'expo-router'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native'
 import { hora } from '../../lib/formato'
 import { StatusBadge } from './StatusBadge'
-import type { EntradaChat } from './types'
+import type { EntradaChat, RespondendoA } from './types'
 
-const ROTULO_CATEGORIA: Record<string, string> = {
+export const ROTULO_CATEGORIA: Record<string, string> = {
   ABASTECIMENTO: '⛽ Abastecimento',
   'MANUTENÇÃO': '🔧 Manutenção',
   OUTRO: 'Outro',
@@ -14,17 +14,42 @@ function moeda(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export function BolhaSolicitacao({ entrada }: { entrada: EntradaChat & { tipo: 'solicitacao' } }) {
+export function BolhaSolicitacao({
+  entrada,
+  aoResponder,
+  destacada,
+}: {
+  entrada: EntradaChat & { tipo: 'solicitacao' }
+  /** Toque longo abre o menu suspenso de ações (hoje só "Responder") --
+   *  só faz sentido pra fonte==='servidor' (tem id de verdade); uma
+   *  ainda só na fila local não recebe essa prop. */
+  aoResponder?: (r: RespondendoA, evento: GestureResponderEvent) => void
+  destacada?: boolean
+}) {
   const router = useRouter()
 
   if (entrada.fonte === 'servidor') {
     const a = entrada.aprovacao
+    const rotuloCategoria = ROTULO_CATEGORIA[a.categoria ?? 'OUTRO']
     return (
       <Pressable
         onPress={() => router.push(`/solicitacao/${a.id}`)}
-        style={({ pressed }) => [styles.bolha, pressed && styles.pressionada]}
+        onLongPress={
+          aoResponder &&
+          ((evento) =>
+            aoResponder(
+              {
+                tipo: 'solicitacao',
+                id: a.id,
+                titulo: `${rotuloCategoria} — ${a.veiculo?.placa ?? '—'}`,
+                texto: a.servico,
+              },
+              evento,
+            ))
+        }
+        style={({ pressed }) => [styles.bolha, pressed && styles.pressionada, destacada && styles.bolhaDestacada]}
       >
-        <Text style={styles.categoria}>{ROTULO_CATEGORIA[a.categoria ?? 'OUTRO']}</Text>
+        <Text style={styles.categoria}>{rotuloCategoria}</Text>
         <Text style={styles.veiculo}>{a.veiculo?.placa ?? '—'}</Text>
         <Text style={styles.servico} numberOfLines={2}>
           {a.servico}
@@ -76,6 +101,7 @@ const styles = StyleSheet.create({
   },
   bolhaLocal: { backgroundColor: '#f8fafc', borderStyle: 'dashed' },
   pressionada: { opacity: 0.7 },
+  bolhaDestacada: { borderWidth: 2, borderColor: '#0d9488' },
   categoria: { fontSize: 13, fontWeight: '700', color: '#0f766e', marginBottom: 2 },
   veiculo: { fontSize: 13, fontWeight: '600', color: '#334155' },
   servico: { fontSize: 14, color: '#1e293b', marginTop: 2 },

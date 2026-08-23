@@ -74,7 +74,8 @@ export function BarraEntrada({
     setEnviandoMensagem(true)
     await enfileirar<MensagemPayload>(TIPO_MENSAGEM, {
       texto: digitado,
-      respondendoA: respondendoA?.id,
+      respondendoA: respondendoA?.tipo === 'mensagem' ? respondendoA.id : undefined,
+      respondendoAprovacaoId: respondendoA?.tipo === 'solicitacao' ? respondendoA.id : undefined,
     })
     runSync()
     setTexto('')
@@ -131,7 +132,7 @@ export function BarraEntrada({
         <View style={styles.respondendoBarra}>
           <View style={styles.respondendoLinha} />
           <View style={styles.respondendoInfo}>
-            <Text style={styles.respondendoAutor}>{respondendoA.autorNome}</Text>
+            <Text style={styles.respondendoAutor}>{respondendoA.titulo}</Text>
             <Text style={styles.respondendoTexto} numberOfLines={1}>
               {respondendoA.texto}
             </Text>
