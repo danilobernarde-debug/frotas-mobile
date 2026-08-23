@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { data as fmtData, moeda } from '../../../src/lib/formato'
 import { urlAnexo } from '../../../src/lib/api'
@@ -46,6 +46,7 @@ export default function TelaDetalheSolicitacao() {
   const [token, setToken] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [fotosDataUri, setFotosDataUri] = useState<Record<number, string>>({})
+  const [fotoAmpliada, setFotoAmpliada] = useState<number | null>(null)
 
   useEffect(() => {
     let cancelado = false
@@ -147,7 +148,14 @@ export default function TelaDetalheSolicitacao() {
                 {anexos.map((a) => (
                   <View key={a.id} style={styles.fotoCartao}>
                     {fotosDataUri[a.id] ? (
-                      <Image source={{ uri: fotosDataUri[a.id] }} style={styles.foto} resizeMode="cover" />
+                      // A miniatura corta em quadrado (cover) -- numa foto
+                      // retrato, a marca d'água (BOMBA/PLACA/KM) fica no
+                      // rodapé da imagem inteira e quase some no corte
+                      // (achado em teste real). Toque abre a foto completa,
+                      // sem cortar nada.
+                      <Pressable onPress={() => setFotoAmpliada(a.id)}>
+                        <Image source={{ uri: fotosDataUri[a.id] }} style={styles.foto} resizeMode="cover" />
+                      </Pressable>
                     ) : (
                       <View style={[styles.foto, styles.fotoCarregando]}>
                         <ActivityIndicator size="small" />
@@ -161,6 +169,28 @@ export default function TelaDetalheSolicitacao() {
           )}
         </ScrollView>
       )}
+
+      <Modal
+        visible={fotoAmpliada !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFotoAmpliada(null)}
+      >
+        <Pressable style={styles.fundoModal} onPress={() => setFotoAmpliada(null)}>
+          {fotoAmpliada !== null && fotosDataUri[fotoAmpliada] && (
+            <Image
+              source={{ uri: fotosDataUri[fotoAmpliada] }}
+              style={styles.fotoAmpliada}
+              resizeMode="contain"
+            />
+          )}
+        </Pressable>
+        <SafeAreaView style={styles.areaSeguraModal} edges={['top']} pointerEvents="box-none">
+          <Pressable style={styles.botaoFecharModal} onPress={() => setFotoAmpliada(null)} hitSlop={12}>
+            <Text style={styles.botaoFecharModalTexto}>✕</Text>
+          </Pressable>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -194,4 +224,18 @@ const styles = StyleSheet.create({
   foto: { width: '100%', aspectRatio: 1, borderRadius: 10, backgroundColor: '#e2e8f0' },
   fotoCarregando: { alignItems: 'center', justifyContent: 'center' },
   fotoLegenda: { fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center' },
+  fundoModal: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+  fotoAmpliada: { width: '100%', height: '85%' },
+  areaSeguraModal: { position: 'absolute', top: 0, left: 0, right: 0 },
+  botaoFecharModal: {
+    alignSelf: 'flex-end',
+    margin: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  botaoFecharModalTexto: { color: '#fff', fontSize: 20, fontWeight: '700' },
 })
