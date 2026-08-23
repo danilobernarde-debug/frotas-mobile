@@ -8,7 +8,7 @@ import { TIPO_NOVA_SOLICITACAO, type NovaSolicitacaoPayload } from '../../outbox
 import { listarTodos } from '../../outbox/outbox'
 import { assinarEstadoSync } from '../../outbox/syncEngine'
 import type { OutboxItem } from '../../outbox/types'
-import type { EntradaChat } from './types'
+import type { EntradaChatReal } from './types'
 
 const INTERVALO_POLL_MS = 30_000
 
@@ -21,7 +21,7 @@ const INTERVALO_POLL_MS = 30_000
  */
 export function useMinhasSolicitacoes() {
   const { perfil } = useAuth()
-  const [entradas, setEntradas] = useState<EntradaChat[]>([])
+  const [entradas, setEntradas] = useState<EntradaChatReal[]>([])
   const [carregando, setCarregando] = useState(true)
 
   const recarregar = useCallback(async () => {
@@ -39,7 +39,7 @@ export function useMinhasSolicitacoes() {
       listarTodos<NovaSolicitacaoPayload | MensagemPayload>(),
     ])
 
-    const doServidor: EntradaChat[] = ((respostaAprovacoes.data as Aprovacao[]) ?? []).map((a) => ({
+    const doServidor: EntradaChatReal[] = ((respostaAprovacoes.data as Aprovacao[]) ?? []).map((a) => ({
       fonte: 'servidor' as const,
       tipo: 'solicitacao' as const,
       id: `servidor-${a.id}`,
@@ -47,7 +47,7 @@ export function useMinhasSolicitacoes() {
       aprovacao: a,
     }))
 
-    const doServidorMensagens: EntradaChat[] = ((respostaMensagens.data as Mensagem[]) ?? []).map((m) => ({
+    const doServidorMensagens: EntradaChatReal[] = ((respostaMensagens.data as Mensagem[]) ?? []).map((m) => ({
       fonte: 'servidor' as const,
       tipo: 'mensagem' as const,
       id: `servidor-msg-${m.id}`,
@@ -55,7 +55,7 @@ export function useMinhasSolicitacoes() {
       mensagem: m,
     }))
 
-    const doLocal: EntradaChat[] = itensLocais
+    const doLocal: EntradaChatReal[] = itensLocais
       .filter((item) => item.tipo === TIPO_NOVA_SOLICITACAO && item.status !== 'enviado')
       .map((item) => ({
         fonte: 'local' as const,
@@ -65,7 +65,7 @@ export function useMinhasSolicitacoes() {
         item: item as OutboxItem<NovaSolicitacaoPayload>,
       }))
 
-    const doLocalMensagens: EntradaChat[] = itensLocais
+    const doLocalMensagens: EntradaChatReal[] = itensLocais
       .filter((item) => item.tipo === TIPO_MENSAGEM && item.status !== 'enviado')
       .map((item) => ({
         fonte: 'local' as const,
