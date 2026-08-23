@@ -15,3 +15,13 @@ export type EntradaChatReal =
 export type EntradaChatDivisor = { tipo: 'divisor'; id: string; rotulo: string }
 
 export type EntradaChat = EntradaChatReal | EntradaChatDivisor
+
+/** Mensagem selecionada como alvo de resposta (estilo WhatsApp) -- só
+ *  guarda o suficiente pra mostrar a prévia acima do campo de digitar;
+ *  `id` é sempre um id de servidor (só mensagens já sincronizadas podem
+ *  ser citadas). */
+export interface RespondendoA {
+  id: number
+  autorNome: string
+  texto: string
+}

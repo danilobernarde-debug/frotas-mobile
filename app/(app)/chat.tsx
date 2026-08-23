@@ -17,12 +17,12 @@ import { BolhaMensagem } from '../../src/features/chat/BolhaMensagem'
 import { BolhaSolicitacao } from '../../src/features/chat/BolhaSolicitacao'
 import { ConteudoFluxo } from '../../src/features/chat/ConteudoFluxo'
 import { inserirDivisoresData } from '../../src/features/chat/divisoresData'
-import type { EntradaChat } from '../../src/features/chat/types'
+import type { EntradaChat, RespondendoA } from '../../src/features/chat/types'
 import { useDivisorNaoLidas } from '../../src/features/chat/useDivisorNaoLidas'
 import { useFluxoSolicitacao } from '../../src/features/chat/useFluxoSolicitacao'
 import { useMinhasSolicitacoes } from '../../src/features/chat/useMinhasSolicitacoes'
 import { diaRelativo } from '../../src/lib/formato'
-import type { CategoriaSolicitacao } from '../../src/lib/tipos'
+import type { CategoriaSolicitacao, Mensagem } from '../../src/lib/tipos'
 import { useNetworkStatus } from '../../src/net/useNetworkStatus'
 import { useSyncStatus } from '../../src/outbox/useSyncStatus'
 import { CabecalhoApp } from '../../src/ui/CabecalhoApp'
@@ -79,6 +79,15 @@ export default function TelaChat() {
   const conectado = useNetworkStatus()
 
   const [fluxoInfo, setFluxoInfo] = useState<{ categoria: CategoriaSolicitacao; chave: number } | null>(null)
+  const [respondendoA, setRespondendoA] = useState<RespondendoA | null>(null)
+
+  // Pra mostrar a prévia de "respondendo a: ..." dentro da bolha sem
+  // precisar de mais uma consulta -- respondendo_a é só um id, e todas as
+  // mensagens do servidor já estão carregadas aqui.
+  const mensagensPorId = new Map<number, Mensagem>()
+  for (const e of entradas) {
+    if (e.tipo === 'mensagem' && e.fonte === 'servidor') mensagensPorId.set(e.mensagem.id, e.mensagem)
+  }
   const proximaChave = useRef(0)
   const listaRef = useRef<FlatList<EntradaChat>>(null)
   // Rola pro final só na 1ª vez que a lista ganha conteúdo -- ao abrir o
@@ -172,7 +181,19 @@ export default function TelaChat() {
                   <View style={styles.divisorLinha} />
                 </View>
               ) : item.tipo === 'mensagem' ? (
-                <BolhaMensagem entrada={item} />
+                <BolhaMensagem
+                  entrada={item}
+                  citada={
+                    item.fonte === 'servidor' && item.mensagem.respondendo_a != null
+                      ? mensagensPorId.get(item.mensagem.respondendo_a)
+                      : undefined
+                  }
+                  // Só mensagens já sincronizadas (fonte==='servidor') têm
+                  // id de servidor pra citar -- uma ainda só na fila local
+                  // não pode ser respondida (decisão do pedido: não
+                  // precisa cobrir esse caso).
+                  aoResponder={item.fonte === 'servidor' ? setRespondendoA : undefined}
+                />
               ) : (
                 <BolhaSolicitacao entrada={item} />
               )
@@ -218,7 +239,13 @@ export default function TelaChat() {
             onCancelar={() => setFluxoInfo(null)}
           />
         ) : (
-          <BarraEntrada fluxo={null} onNovaCategoria={iniciarFluxo} onConcluido={recarregar} />
+          <BarraEntrada
+            fluxo={null}
+            onNovaCategoria={iniciarFluxo}
+            onConcluido={recarregar}
+            respondendoA={respondendoA}
+            aoLimparResposta={() => setRespondendoA(null)}
+          />
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>

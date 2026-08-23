@@ -5,6 +5,10 @@ import type { ContextoEnvio, ResultadoEnvio } from '../types'
 
 export interface MensagemPayload {
   texto: string
+  /** Id (do servidor) da mensagem sendo respondida, estilo WhatsApp.
+   *  Só mensagens já sincronizadas têm esse id -- não dá pra responder
+   *  uma que ainda está só na fila local. */
+  respondendoA?: number
 }
 
 export const TIPO_MENSAGEM = 'MENSAGEM'
@@ -26,6 +30,7 @@ async function enviar(
   const { error } = await supabase.from('frota_mensagens').insert({
     encarregado_id: sessao.session.user.id,
     texto: payload.texto,
+    respondendo_a: payload.respondendoA ?? null,
     origem_local_id: ctx.itemId,
   })
 

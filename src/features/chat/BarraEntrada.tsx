@@ -5,6 +5,7 @@ import { TIPO_MENSAGEM, type MensagemPayload } from '../../outbox/handlers/mensa
 import { enfileirar } from '../../outbox/outbox'
 import { runSync } from '../../outbox/syncEngine'
 import { MenuAnexo } from './MenuAnexo'
+import type { RespondendoA } from './types'
 import type { FluxoSolicitacao } from './useFluxoSolicitacao'
 
 /**
@@ -24,10 +25,16 @@ export function BarraEntrada({
   fluxo,
   onNovaCategoria,
   onConcluido,
+  respondendoA,
+  aoLimparResposta,
 }: {
   fluxo: FluxoSolicitacao | null
   onNovaCategoria: (categoria: CategoriaSolicitacao) => void
   onConcluido: () => void
+  /** Só faz sentido no estado ocioso (fluxo === null) -- responder uma
+   *  mensagem é mensagem livre, não faz parte do roteiro guiado. */
+  respondendoA?: RespondendoA | null
+  aoLimparResposta?: () => void
 }) {
   const [texto, setTexto] = useState('')
   const [enviandoMensagem, setEnviandoMensagem] = useState(false)
@@ -65,10 +72,14 @@ export function BarraEntrada({
     const digitado = texto.trim()
     if (!digitado) return
     setEnviandoMensagem(true)
-    await enfileirar<MensagemPayload>(TIPO_MENSAGEM, { texto: digitado })
+    await enfileirar<MensagemPayload>(TIPO_MENSAGEM, {
+      texto: digitado,
+      respondendoA: respondendoA?.id,
+    })
     runSync()
     setTexto('')
     setEnviandoMensagem(false)
+    aoLimparResposta?.()
     onConcluido()
   }
 
@@ -115,48 +126,80 @@ export function BarraEntrada({
   const enviandoAlgo = fluxo?.enviando || enviandoMensagem
 
   return (
-    <View style={styles.barra}>
-      {/* Desabilita "+" também enquanto há rascunho não enviado no campo
-          -- sem isso, tocar em + no meio de digitar uma mensagem
-          descarta o texto em silêncio (a barra ociosa desmonta ao trocar
-          pro fluxo guiado). Força "envie ou limpe antes de iniciar um
-          novo pedido" em vez de perder o rascunho sem aviso. */}
-      <MenuAnexo onEscolher={onNovaCategoria} desabilitado={Boolean(fluxo) || texto.trim().length > 0} />
+    <View>
+      {!fluxo && respondendoA && (
+        <View style={styles.respondendoBarra}>
+          <View style={styles.respondendoLinha} />
+          <View style={styles.respondendoInfo}>
+            <Text style={styles.respondendoAutor}>{respondendoA.autorNome}</Text>
+            <Text style={styles.respondendoTexto} numberOfLines={1}>
+              {respondendoA.texto}
+            </Text>
+          </View>
+          <Pressable onPress={aoLimparResposta} hitSlop={8}>
+            <Text style={styles.respondendoFechar}>✕</Text>
+          </Pressable>
+        </View>
+      )}
 
-      <TextInput
-        style={[styles.campo, !editavel && styles.campoDesabilitado]}
-        value={texto}
-        onChangeText={setTexto}
-        placeholder={placeholder}
-        placeholderTextColor="#94a3b8"
-        editable={editavel}
-        pointerEvents={editavel ? 'auto' : 'none'}
-        keyboardType={tecladoNumerico ? 'decimal-pad' : 'default'}
-        // multiline: o campo cresce junto com o texto (até maxHeight, depois
-        // rola por dentro) -- igual WhatsApp. returnKeyType="send" +
-        // onSubmitEditing (versão anterior) fazia o Enter DISPARAR o envio
-        // em vez de quebrar linha -- exatamente o contrário do que o
-        // WhatsApp faz. Enter aqui só quebra linha; enviar é só pelo ➤.
-        multiline
-        returnKeyType="default"
-      />
+      <View style={styles.barra}>
+        {/* Desabilita "+" também enquanto há rascunho não enviado no campo
+            -- sem isso, tocar em + no meio de digitar uma mensagem
+            descarta o texto em silêncio (a barra ociosa desmonta ao trocar
+            pro fluxo guiado). Força "envie ou limpe antes de iniciar um
+            novo pedido" em vez de perder o rascunho sem aviso. */}
+        <MenuAnexo onEscolher={onNovaCategoria} desabilitado={Boolean(fluxo) || texto.trim().length > 0} />
 
-      <Pressable
-        onPress={aoTocarEnviar}
-        disabled={!habilitaEnviar || enviandoAlgo}
-        style={[styles.botaoEnviar, (!habilitaEnviar || enviandoAlgo) && styles.botaoDesabilitado]}
-      >
-        {enviandoAlgo ? (
-          <ActivityIndicator color="#fff" size="small" />
-        ) : (
-          <Text style={styles.iconeEnviar}>{iconeEnviar}</Text>
-        )}
-      </Pressable>
+        <TextInput
+          style={[styles.campo, !editavel && styles.campoDesabilitado]}
+          value={texto}
+          onChangeText={setTexto}
+          placeholder={placeholder}
+          placeholderTextColor="#94a3b8"
+          editable={editavel}
+          pointerEvents={editavel ? 'auto' : 'none'}
+          keyboardType={tecladoNumerico ? 'decimal-pad' : 'default'}
+          // multiline: o campo cresce junto com o texto (até maxHeight, depois
+          // rola por dentro) -- igual WhatsApp. returnKeyType="send" +
+          // onSubmitEditing (versão anterior) fazia o Enter DISPARAR o envio
+          // em vez de quebrar linha -- exatamente o contrário do que o
+          // WhatsApp faz. Enter aqui só quebra linha; enviar é só pelo ➤.
+          multiline
+          returnKeyType="default"
+        />
+
+        <Pressable
+          onPress={aoTocarEnviar}
+          disabled={!habilitaEnviar || enviandoAlgo}
+          style={[styles.botaoEnviar, (!habilitaEnviar || enviandoAlgo) && styles.botaoDesabilitado]}
+        >
+          {enviandoAlgo ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.iconeEnviar}>{iconeEnviar}</Text>
+          )}
+        </Pressable>
+      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  respondendoBarra: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  respondendoLinha: { width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: '#0d9488' },
+  respondendoInfo: { flex: 1 },
+  respondendoAutor: { fontSize: 12, fontWeight: '700', color: '#0f766e' },
+  respondendoTexto: { fontSize: 12, color: '#64748b' },
+  respondendoFechar: { fontSize: 16, color: '#94a3b8', paddingHorizontal: 4 },
   barra: {
     flexDirection: 'row',
     // flex-end (não 'center'): conforme o campo cresce com o texto, o "+"
