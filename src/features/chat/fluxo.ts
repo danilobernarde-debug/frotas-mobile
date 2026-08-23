@@ -8,6 +8,10 @@ export interface DefinicaoPasso {
   pergunta: string
   /** Só pra passos foto_unica -- vira o `tipo` do anexo (BOMBA/PLACA/KM). */
   tipoFoto?: string
+  /** Só pra passos foto_unica -- texto do botão de captura, específico
+   *  por foto (ex.: "Tirar foto da bomba"). Sem isso, o botão usa o
+   *  texto genérico padrão. */
+  textoBotao?: string
 }
 
 /**
@@ -25,9 +29,9 @@ export function obterFluxo(categoria: CategoriaSolicitacao): DefinicaoPasso[] {
     return [
       veiculo,
       km,
-      { id: 'foto_bomba', tipo: 'foto_unica', pergunta: 'Foto da bomba de combustível', tipoFoto: 'BOMBA' },
-      { id: 'foto_placa', tipo: 'foto_unica', pergunta: 'Foto da placa do veículo', tipoFoto: 'PLACA' },
-      { id: 'foto_km', tipo: 'foto_unica', pergunta: 'Foto do KM do veículo', tipoFoto: 'KM' },
+      { id: 'foto_bomba', tipo: 'foto_unica', pergunta: 'Foto da bomba de combustível', tipoFoto: 'BOMBA', textoBotao: 'Tirar foto da bomba' },
+      { id: 'foto_km', tipo: 'foto_unica', pergunta: 'Foto do KM do veículo', tipoFoto: 'KM', textoBotao: 'Tirar foto do hodômetro' },
+      { id: 'foto_placa', tipo: 'foto_unica', pergunta: 'Foto da placa do veículo', tipoFoto: 'PLACA', textoBotao: 'Tirar foto da placa' },
       valor,
       confirmar,
     ]

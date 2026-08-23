@@ -62,24 +62,28 @@ export function ConteudoFluxo({ fluxo }: { fluxo: FluxoSolicitacao }) {
       <View style={styles.bloco}>
         <Bolha texto={passo.pergunta} />
         {jaTem ? (
-          // Só aparece assim ao voltar pra um passo cuja foto já tinha
-          // sido tirada -- na 1ª vez, tirarFotoUnica() já avança sozinho
-          // pro próximo passo, então nunca fica parado aqui. Sem os dois
-          // botões, "voltar" virava beco sem saída: nenhuma ação levava
-          // pra frente de novo.
-          <View style={styles.fotoRegistradaLinha}>
+          fluxo.avancandoAuto ? (
+            // Acabou de tirar esta foto -- só o check, avança sozinho
+            // em seguida (ver tirarFotoUnica em useFluxoSolicitacao.ts).
             <Text style={styles.fotoOk}>✓ Foto registrada</Text>
-            <View style={styles.fotoRegistradaAcoes}>
-              <Pressable onPress={fluxo.tirarFotoUnica} hitSlop={8}>
-                <Text style={styles.linkTirarNovo}>🔄 Tirar de novo</Text>
-              </Pressable>
-              <Pressable onPress={fluxo.avancar} hitSlop={8}>
-                <Text style={styles.linkContinuar}>Continuar →</Text>
-              </Pressable>
+          ) : (
+            // Voltou pra um passo cuja foto já tinha sido tirada -- sem
+            // avanço automático em andamento, precisa de uma ação
+            // explícita pra seguir (ou trocar a foto).
+            <View style={styles.fotoRegistradaLinha}>
+              <Text style={styles.fotoOk}>✓ Foto registrada</Text>
+              <View style={styles.fotoRegistradaAcoes}>
+                <Pressable onPress={fluxo.tirarFotoUnica} hitSlop={8}>
+                  <Text style={styles.linkTirarNovo}>🔄 Tirar de novo</Text>
+                </Pressable>
+                <Pressable onPress={fluxo.avancar} hitSlop={8}>
+                  <Text style={styles.linkContinuar}>Continuar →</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
+          )
         ) : (
-          <BotaoFoto onPress={fluxo.tirarFotoUnica} carregando={fluxo.capturando} />
+          <BotaoFoto onPress={fluxo.tirarFotoUnica} carregando={fluxo.capturando} texto={passo.textoBotao} />
         )}
       </View>
     )
