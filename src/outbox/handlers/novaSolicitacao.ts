@@ -11,9 +11,11 @@ export interface FotoPayload {
   tipo: string
   legenda?: string
   status: 'pendente' | 'enviado'
-  /** Só nas 3 fotos do abastecimento -- alimentam a marca d'água no
-   *  servidor. Capturadas no momento da foto, não do envio (importa num
-   *  app offline-first, onde a foto pode subir horas depois). */
+  /** Alimentam a marca d'água no servidor (fotos do abastecimento e da
+   *  manutenção -- ver TIPOS_COM_MARCA_DAGUA em
+   *  frotas-web/src/app/api/mobile/anexos/route.ts). Capturadas no
+   *  momento da foto, não do envio (importa num app offline-first, onde
+   *  a foto pode subir horas depois). */
   capturadaEm?: string
   latitude?: number
   longitude?: number

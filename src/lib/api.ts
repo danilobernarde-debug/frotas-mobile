@@ -24,9 +24,9 @@ export async function enviarAnexo(params: {
   tipo?: string
   legenda?: string
   tokenAcesso: string
-  /** Só as 3 fotos do abastecimento carregam isto -- ver FotoPayload em
-   *  outbox/handlers/novaSolicitacao.ts. Fotos de manutenção/checklist
-   *  nunca preenchem, então nunca entram no form. */
+  /** Fotos do abastecimento e da manutenção carregam isto -- ver
+   *  FotoPayload em outbox/handlers/novaSolicitacao.ts. Fotos de
+   *  checklist nunca preenchem, então nunca entram no form. */
   capturadaEm?: string
   latitude?: number
   longitude?: number

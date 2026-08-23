@@ -41,26 +41,27 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
   const [capturando, setCapturando] = useState(false)
   const [enviando, setEnviando] = useState(false)
 
-  // Dispara assim que o roteiro de abastecimento começa -- antes até do
-  // veículo/KM serem escolhidos, não só depois da 1ª foto. Duas razões:
-  // (1) dá tempo de sobra pra já estar resolvido quando chegar nas fotos
-  // (o usuário ainda vai escolher veículo e digitar KM antes disso); (2)
+  // Dispara assim que o roteiro começa -- antes até do veículo ser
+  // escolhido, não só depois da 1ª foto. Duas razões: (1) dá tempo de
+  // sobra pra já estar resolvido quando chegar nas fotos (o usuário ainda
+  // vai escolher veículo e preencher texto antes disso); (2)
   // principalmente, evita pedir permissão de localização logo depois que
   // a câmera fecha -- no Expo Go isso trava o diálogo do sistema pra
   // sempre (bug real visto em teste, tanto Android quanto iOS). Uma
-  // chamada só, reaproveitada pelas 3 fotos: é o mesmo local no mesmo
-  // minuto, não faz sentido buscar de novo a cada uma. `iniciada` (não só
-  // o dependency array) evita disparar de novo no duplo-mount que o modo
-  // de desenvolvimento do React faz de propósito (confirmado em teste:
-  // sem essa guarda, obterLocalizacaoAtual() rodava 2x em paralelo).
+  // chamada só, reaproveitada por todas as fotos do roteiro (fixas ou da
+  // lista aberta): é o mesmo local no mesmo minuto, não faz sentido
+  // buscar de novo a cada uma. `iniciada` (não só o dependency array)
+  // evita disparar de novo no duplo-mount que o modo de desenvolvimento
+  // do React faz de propósito (confirmado em teste: sem essa guarda,
+  // obterLocalizacaoAtual() rodava 2x em paralelo).
   const localizacaoPromise = useRef<Promise<LocalCapturado | null> | null>(null)
   const localizacaoIniciada = useRef(false)
   useEffect(() => {
-    if (categoria === 'ABASTECIMENTO' && !localizacaoIniciada.current) {
+    if (!localizacaoIniciada.current) {
       localizacaoIniciada.current = true
       localizacaoPromise.current = obterLocalizacaoAtual()
     }
-  }, [categoria])
+  }, [])
 
   const passo = passos[passoAtual]
 
@@ -95,45 +96,61 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
     }
   }
 
+  /** Tira uma foto e já resolve a localização (que começou a buscar lá no
+   *  início do roteiro -- aqui só espera o que já estava em andamento,
+   *  nunca inicia um pedido novo logo depois da câmera fechar). Carimba
+   *  no momento da captura, não do envio -- importa num app
+   *  offline-first, onde a foto pode subir horas depois. Compartilhada
+   *  pelos dois roteiros de foto (slots fixos e lista aberta) pra
+   *  alimentar a marca d'água do lado do servidor do mesmo jeito nos
+   *  dois. Null se o usuário cancelar a captura. */
+  async function capturarFotoComLocal(): Promise<Omit<FotoCapturada, 'tipoFoto'> | null> {
+    setCapturando(true)
+    const uri = await capturarFoto()
+    if (!uri) {
+      setCapturando(false)
+      return null
+    }
+    const capturadaEm = new Date().toISOString()
+    const local = await (localizacaoPromise.current ?? Promise.resolve(null))
+    setCapturando(false)
+    return {
+      uriLocal: uri,
+      capturadaEm,
+      latitude: local?.latitude,
+      longitude: local?.longitude,
+      localizacaoRotulo: local?.rotulo ?? undefined,
+    }
+  }
+
   /** Usada pelo passo fotos_abastecimento -- todas as fotos fixas ficam
    *  visíveis juntas (não mais uma pergunta por vez), então capturar uma
    *  não avança o passo sozinho; só substitui a foto daquele tipo,
    *  igual "tirar de novo" também faz. Quem avança é o botão de enviar
    *  do rodapé, quando os 3 tipos já tiverem foto (ver BarraEntrada). */
   async function tirarFotoSlot(tipoFoto: string) {
-    setCapturando(true)
-    const uri = await capturarFoto()
-    if (!uri) {
-      setCapturando(false)
-      return
-    }
-    // Carimba no momento da captura, não do envio -- importa num app
-    // offline-first, onde a foto pode subir horas depois. A localização
-    // já foi disparada lá no início do roteiro (useEffect acima) -- aqui
-    // só espera o que já estava em andamento, nunca inicia um pedido novo
-    // logo depois da câmera fechar.
-    const capturadaEm = new Date().toISOString()
-    const local = await (localizacaoPromise.current ?? Promise.resolve(null))
-    setCapturando(false)
-    setFotos((atual) => [
-      ...atual.filter((f) => f.tipoFoto !== tipoFoto),
-      {
-        tipoFoto,
-        uriLocal: uri,
-        capturadaEm,
-        latitude: local?.latitude,
-        longitude: local?.longitude,
-        localizacaoRotulo: local?.rotulo ?? undefined,
-      },
-    ])
+    const foto = await capturarFotoComLocal()
+    if (!foto) return
+    setFotos((atual) => [...atual.filter((f) => f.tipoFoto !== tipoFoto), { tipoFoto, ...foto }])
   }
 
+  /** Usada pelo passo foto_multipla (manutenção) -- lista aberta, cada
+   *  toque em "Tirar foto" soma mais uma. */
   async function tirarFotoMultipla() {
-    setCapturando(true)
-    const uri = await capturarFoto()
-    setCapturando(false)
-    if (!uri) return
-    setFotos((atual) => [...atual, { tipoFoto: 'PROBLEMA', uriLocal: uri }])
+    const foto = await capturarFotoComLocal()
+    if (!foto) return
+    setFotos((atual) => [...atual, { tipoFoto: 'PROBLEMA', ...foto }])
+  }
+
+  /** "Tirar de novo" de uma foto específica já tirada na lista aberta --
+   *  identifica qual pela uri local (não tem slot fixo pra identificar,
+   *  diferente de tirarFotoSlot). */
+  async function substituirFotoMultipla(uriLocalAntigo: string) {
+    const foto = await capturarFotoComLocal()
+    if (!foto) return
+    setFotos((atual) =>
+      atual.map((f) => (f.uriLocal === uriLocalAntigo ? { tipoFoto: 'PROBLEMA', ...foto } : f)),
+    )
   }
 
   async function enviarSolicitacao() {
@@ -190,6 +207,7 @@ export function useFluxoSolicitacao(categoria: CategoriaSolicitacao) {
     avancar,
     tirarFotoSlot,
     tirarFotoMultipla,
+    substituirFotoMultipla,
     enviarSolicitacao,
     voltar,
   }

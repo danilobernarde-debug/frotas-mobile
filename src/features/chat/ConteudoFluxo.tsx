@@ -72,17 +72,13 @@ export function ConteudoFluxo({ fluxo }: { fluxo: FluxoSolicitacao }) {
           {passo.slots?.map((slot) => {
             const foto = fluxo.fotos.find((f) => f.tipoFoto === slot.tipoFoto)
             return foto ? (
-              <View key={slot.tipoFoto} style={styles.linhaFotoPronta}>
-                <Pressable onPress={() => setFotoAberta(foto.uriLocal)}>
-                  <Image source={{ uri: foto.uriLocal }} style={styles.miniatura} resizeMode="cover" />
-                </Pressable>
-                <View style={styles.linhaFotoInfo}>
-                  <Text style={styles.fotoOk}>✓ {slot.rotulo}</Text>
-                  <Pressable onPress={() => fluxo.tirarFotoSlot(slot.tipoFoto)} hitSlop={8}>
-                    <Text style={styles.linkTirarNovo}>🔄 Tirar de novo</Text>
-                  </Pressable>
-                </View>
-              </View>
+              <LinhaFotoPronta
+                key={slot.tipoFoto}
+                uri={foto.uriLocal}
+                rotulo={slot.rotulo}
+                aoAbrir={() => setFotoAberta(foto.uriLocal)}
+                aoTirarNovamente={() => fluxo.tirarFotoSlot(slot.tipoFoto)}
+              />
             ) : (
               <BotaoFoto
                 key={slot.tipoFoto}
@@ -94,31 +90,42 @@ export function ConteudoFluxo({ fluxo }: { fluxo: FluxoSolicitacao }) {
           })}
         </View>
 
-        <Modal
-          visible={fotoAberta !== null}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setFotoAberta(null)}
-        >
-          <Pressable style={styles.fundoModalFoto} onPress={() => setFotoAberta(null)}>
-            {fotoAberta && (
-              <Image source={{ uri: fotoAberta }} style={styles.fotoAmpliadaModal} resizeMode="contain" />
-            )}
-          </Pressable>
-        </Modal>
+        <ModalFotoAmpliada uri={fotoAberta} onFechar={() => setFotoAberta(null)} />
       </View>
     )
   }
 
   if (passo.tipo === 'foto_multipla') {
+    // Lista aberta (1+), diferente dos slots fixos do abastecimento --
+    // mas mesma UX: cada foto já tirada aparece como miniatura tocável
+    // (abre em tela cheia) com opção de tirar de novo, em vez de só um
+    // contador de texto.
     return (
       <View style={styles.bloco}>
         <Bolha texto={passo.pergunta} />
-        <Text style={styles.contador}>{fluxo.fotos.length} foto(s) adicionada(s)</Text>
-        <BotaoFoto onPress={fluxo.tirarFotoMultipla} carregando={fluxo.capturando} texto="Tirar foto" />
+        {fluxo.fotos.length > 0 && (
+          <View style={styles.listaFotosFixas}>
+            {fluxo.fotos.map((foto, indice) => (
+              <LinhaFotoPronta
+                key={foto.uriLocal}
+                uri={foto.uriLocal}
+                rotulo={`Foto ${indice + 1}`}
+                aoAbrir={() => setFotoAberta(foto.uriLocal)}
+                aoTirarNovamente={() => fluxo.substituirFotoMultipla(foto.uriLocal)}
+              />
+            ))}
+          </View>
+        )}
+        <BotaoFoto
+          onPress={fluxo.tirarFotoMultipla}
+          carregando={fluxo.capturando}
+          texto={fluxo.fotos.length > 0 ? 'Tirar outra foto' : 'Tirar foto'}
+        />
         {fluxo.fotos.length > 0 && (
           <Text style={styles.dica}>Toque no ➤ quando terminar de anexar fotos.</Text>
         )}
+
+        <ModalFotoAmpliada uri={fotoAberta} onFechar={() => setFotoAberta(null)} />
       </View>
     )
   }
@@ -157,6 +164,42 @@ function LinhaResumo({ rotulo, valor }: { rotulo: string; valor: string }) {
       <Text style={styles.linhaResumoRotulo}>{rotulo}</Text>
       <Text style={styles.linhaResumoValor}>{valor}</Text>
     </View>
+  )
+}
+
+function LinhaFotoPronta({
+  uri,
+  rotulo,
+  aoAbrir,
+  aoTirarNovamente,
+}: {
+  uri: string
+  rotulo: string
+  aoAbrir: () => void
+  aoTirarNovamente: () => void
+}) {
+  return (
+    <View style={styles.linhaFotoPronta}>
+      <Pressable onPress={aoAbrir}>
+        <Image source={{ uri }} style={styles.miniatura} resizeMode="cover" />
+      </Pressable>
+      <View style={styles.linhaFotoInfo}>
+        <Text style={styles.fotoOk}>✓ {rotulo}</Text>
+        <Pressable onPress={aoTirarNovamente} hitSlop={8}>
+          <Text style={styles.linkTirarNovo}>🔄 Tirar de novo</Text>
+        </Pressable>
+      </View>
+    </View>
+  )
+}
+
+function ModalFotoAmpliada({ uri, onFechar }: { uri: string | null; onFechar: () => void }) {
+  return (
+    <Modal visible={uri !== null} transparent animationType="fade" onRequestClose={onFechar}>
+      <Pressable style={styles.fundoModalFoto} onPress={onFechar}>
+        {uri && <Image source={{ uri }} style={styles.fotoAmpliadaModal} resizeMode="contain" />}
+      </Pressable>
+    </Modal>
   )
 }
 
@@ -216,7 +259,6 @@ const styles = StyleSheet.create({
   linhaFotoInfo: { flex: 1, gap: 4 },
   fundoModalFoto: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
   fotoAmpliadaModal: { width: '100%', height: '85%' },
-  contador: { color: '#475569', fontSize: 13, marginBottom: 8 },
   dica: { color: '#94a3b8', fontSize: 12, marginTop: 8, fontStyle: 'italic' },
   botaoFoto: { alignSelf: 'flex-start', backgroundColor: '#0d9488', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 },
   botaoFotoTexto: { color: '#fff', fontSize: 15, fontWeight: '700' },
