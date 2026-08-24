@@ -22,6 +22,9 @@ export async function enviarAnexo(params: {
   idPai: number
   uriArquivo: string
   tipo?: string
+  /** Só faz sentido pra alvo === 'checklists' -- identifica de qual dos
+   *  20 itens é a foto (frota_checklist_fotos.item_id). */
+  itemId?: number
   legenda?: string
   tokenAcesso: string
   /** Fotos do abastecimento e da manutenção carregam isto -- ver
@@ -36,6 +39,7 @@ export async function enviarAnexo(params: {
   form.append('alvo', params.alvo)
   form.append(params.alvo === 'aprovacoes' ? 'aprovacao_id' : 'checklist_id', String(params.idPai))
   if (params.tipo) form.append('tipo', params.tipo)
+  if (params.itemId !== undefined) form.append('item_id', String(params.itemId))
   if (params.legenda) form.append('legenda', params.legenda)
   if (params.capturadaEm) form.append('capturada_em', params.capturadaEm)
   if (params.latitude !== undefined) form.append('latitude', String(params.latitude))

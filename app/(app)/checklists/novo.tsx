@@ -2,6 +2,8 @@ import { useRouter } from 'expo-router'
 import { useMemo, useState } from 'react'
 import {
   ActivityIndicator,
+  Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,10 +12,12 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useCapturaComLocal, type FotoComLocal } from '../../../src/camera/useCapturaComLocal'
 import { useItensChecklist } from '../../../src/features/checklists/useItensChecklist'
 import { useVeiculos } from '../../../src/features/veiculos/useVeiculos'
 import type { Veiculo } from '../../../src/lib/tipos'
 import { TIPO_CHECKLIST, type ChecklistPayload, type RespostaPayload } from '../../../src/outbox/handlers/checklist'
+import type { FotoPayload } from '../../../src/outbox/handlers/novaSolicitacao'
 import { enfileirar } from '../../../src/outbox/outbox'
 import { runSync } from '../../../src/outbox/syncEngine'
 
@@ -23,11 +27,46 @@ export default function TelaNovoChecklist() {
   const router = useRouter()
   const { veiculos } = useVeiculos()
   const { itens, carregando: carregandoItens } = useItensChecklist()
+  const { capturar } = useCapturaComLocal()
 
   const [veiculo, setVeiculo] = useState<Veiculo | null>(null)
+  const [buscaVeiculo, setBuscaVeiculo] = useState('')
+  // A frota real tem mais de 100 veículos -- lista sempre aberta faria
+  // rolar tudo isso só pra chegar nos itens do checklist. Colapsa pra uma
+  // linha assim que escolhe; "Trocar" reabre a busca (mesmo padrão de
+  // app/(app)/nova-solicitacao.tsx).
+  const [trocandoVeiculo, setTrocandoVeiculo] = useState(false)
   const [odometro, setOdometro] = useState('')
   const [respostas, setRespostas] = useState<Record<number, { valor: Valor; observacao: string }>>({})
   const [enviando, setEnviando] = useState(false)
+
+  // Foto opcional por item -- uma por item, disponível em qualquer um dos
+  // 20 (não só nos marcados "Não"). Ainda não enviada.
+  const [fotosPorItem, setFotosPorItem] = useState<Record<number, FotoComLocal>>({})
+  const [capturandoItemId, setCapturandoItemId] = useState<number | null>(null)
+  // uri local da foto aberta em tela cheia, ou null se o modal tá fechado.
+  const [fotoAberta, setFotoAberta] = useState<string | null>(null)
+
+  async function tirarFotoItem(itemId: number) {
+    setCapturandoItemId(itemId)
+    const foto = await capturar()
+    setCapturandoItemId(null)
+    if (!foto) return
+    setFotosPorItem((atual) => ({ ...atual, [itemId]: foto }))
+  }
+
+  function removerFotoItem(itemId: number) {
+    setFotosPorItem((atual) => {
+      const { [itemId]: _removida, ...resto } = atual
+      return resto
+    })
+  }
+
+  const mostrarListaVeiculos = !veiculo || trocandoVeiculo
+  const filtro = buscaVeiculo.trim().toLowerCase()
+  const veiculosFiltrados = filtro
+    ? veiculos.filter((v) => v.placa.toLowerCase().includes(filtro) || v.modelo.toLowerCase().includes(filtro))
+    : veiculos
 
   const respondidos = useMemo(
     () => itens.filter((i) => respostas[i.id]?.valor).length,
@@ -60,11 +99,21 @@ export default function TelaNovoChecklist() {
       }
     })
 
+    const fotos: FotoPayload[] = Object.entries(fotosPorItem).map(([itemId, foto]) => ({
+      uriLocal: foto.uriLocal,
+      itemId: Number(itemId),
+      status: 'pendente',
+      capturadaEm: foto.capturadaEm,
+      latitude: foto.latitude,
+      longitude: foto.longitude,
+      localizacaoRotulo: foto.localizacaoRotulo,
+    }))
+
     const payload: ChecklistPayload = {
       veiculoId: veiculo.id,
       odometro: Number(odometro.replace(',', '.')) || undefined,
       respostas: listaRespostas,
-      fotos: [],
+      fotos,
     }
 
     await enfileirar(TIPO_CHECKLIST, payload)
@@ -88,19 +137,50 @@ export default function TelaNovoChecklist() {
 
       <ScrollView contentContainerStyle={styles.conteudo}>
         <Text style={styles.rotulo}>Veículo</Text>
-        <View style={styles.listaVeiculos}>
-          {veiculos.map((v) => (
-            <Pressable
-              key={v.id}
-              onPress={() => setVeiculo(v)}
-              style={[styles.chip, veiculo?.id === v.id && styles.chipSelecionado]}
-            >
-              <Text style={[styles.chipTexto, veiculo?.id === v.id && styles.chipTextoSelecionado]}>
-                {v.placa}
-              </Text>
+        {mostrarListaVeiculos ? (
+          <>
+            {veiculos.length > 0 && (
+              <TextInput
+                style={styles.input}
+                value={buscaVeiculo}
+                onChangeText={setBuscaVeiculo}
+                placeholder="Buscar por placa ou modelo…"
+                placeholderTextColor="#94a3b8"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            )}
+            <View style={styles.listaVeiculos}>
+              {veiculos.length === 0 && <Text style={styles.vazio}>Nenhum veículo disponível.</Text>}
+              {veiculos.length > 0 && veiculosFiltrados.length === 0 && (
+                <Text style={styles.vazio}>Nenhum veículo encontrado.</Text>
+              )}
+              {veiculosFiltrados.map((v) => (
+                <Pressable
+                  key={v.id}
+                  onPress={() => {
+                    setVeiculo(v)
+                    setTrocandoVeiculo(false)
+                  }}
+                  style={[styles.chip, veiculo?.id === v.id && styles.chipSelecionado]}
+                >
+                  <Text style={[styles.chipTexto, veiculo?.id === v.id && styles.chipTextoSelecionado]}>
+                    {v.placa} — {v.modelo}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : (
+          <View style={styles.veiculoEscolhido}>
+            <Text style={styles.veiculoEscolhidoTexto}>
+              {veiculo!.placa} — {veiculo!.modelo}
+            </Text>
+            <Pressable onPress={() => setTrocandoVeiculo(true)} hitSlop={8}>
+              <Text style={styles.linkTrocar}>Trocar</Text>
             </Pressable>
-          ))}
-        </View>
+          </View>
+        )}
 
         <Text style={styles.rotulo}>KM do odômetro</Text>
         <TextInput
@@ -121,6 +201,7 @@ export default function TelaNovoChecklist() {
         ) : (
           itens.map((item, indice) => {
             const r = respostas[item.id]
+            const foto = fotosPorItem[item.id]
             return (
               <View key={item.id} style={styles.itemCartao}>
                 <Text style={styles.itemDescricao}>
@@ -139,11 +220,45 @@ export default function TelaNovoChecklist() {
                     placeholder="O que está errado?"
                   />
                 )}
+                <View style={styles.linhaFoto}>
+                  {foto ? (
+                    <View style={styles.fotoItemPronta}>
+                      <Pressable onPress={() => setFotoAberta(foto.uriLocal)}>
+                        <Image source={{ uri: foto.uriLocal }} style={styles.miniaturaItem} resizeMode="cover" />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => removerFotoItem(item.id)}
+                        hitSlop={8}
+                        style={styles.removerFotoItem}
+                      >
+                        <Text style={styles.removerFotoItemTexto}>✕</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={() => tirarFotoItem(item.id)}
+                      disabled={capturandoItemId === item.id}
+                      style={[styles.botaoFotoItem, capturandoItemId === item.id && styles.desabilitado]}
+                    >
+                      {capturandoItemId === item.id ? (
+                        <ActivityIndicator size="small" color="#0d9488" />
+                      ) : (
+                        <Text style={styles.botaoFotoItemTexto}>📷 Foto</Text>
+                      )}
+                    </Pressable>
+                  )}
+                </View>
               </View>
             )
           })
         )}
       </ScrollView>
+
+      <Modal visible={fotoAberta !== null} transparent animationType="fade" onRequestClose={() => setFotoAberta(null)}>
+        <Pressable style={styles.fundoModalFoto} onPress={() => setFotoAberta(null)}>
+          {fotoAberta && <Image source={{ uri: fotoAberta }} style={styles.fotoAmpliadaModal} resizeMode="contain" />}
+        </Pressable>
+      </Modal>
 
       <View style={styles.rodape}>
         <Pressable
@@ -196,11 +311,25 @@ const styles = StyleSheet.create({
   tituloCabecalho: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   conteudo: { padding: 16, paddingBottom: 24 },
   rotulo: { fontSize: 13, fontWeight: '700', color: '#334155', marginTop: 14, marginBottom: 6 },
-  listaVeiculos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  listaVeiculos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  vazio: { color: '#94a3b8', fontStyle: 'italic' },
   chip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#fff' },
   chipSelecionado: { backgroundColor: '#0d9488', borderColor: '#0d9488' },
   chipTexto: { fontSize: 14, fontWeight: '600', color: '#334155' },
   chipTextoSelecionado: { color: '#fff' },
+  veiculoEscolhido: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  veiculoEscolhidoTexto: { fontSize: 15, fontWeight: '600', color: '#0f172a', flexShrink: 1 },
+  linkTrocar: { color: '#0d9488', fontWeight: '700', fontSize: 14, marginLeft: 10 },
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 14, height: 46, fontSize: 16, backgroundColor: '#fff' },
   separador: { height: 1, backgroundColor: '#e2e8f0', marginTop: 18 },
   contador: { fontSize: 13, color: '#64748b', marginTop: 12, marginBottom: 6, fontWeight: '600' },
@@ -210,6 +339,36 @@ const styles = StyleSheet.create({
   opcaoValor: { flex: 1, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingVertical: 9, alignItems: 'center' },
   opcaoValorTexto: { fontSize: 13, fontWeight: '700', color: '#475569' },
   inputObs: { marginTop: 8, borderWidth: 1, borderColor: '#fecaca', borderRadius: 8, paddingHorizontal: 10, height: 40, fontSize: 14, backgroundColor: '#fff' },
+  linhaFoto: { marginTop: 8 },
+  botaoFotoItem: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#0d9488',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    minWidth: 44,
+  },
+  botaoFotoItemTexto: { color: '#0d9488', fontSize: 13, fontWeight: '700' },
+  desabilitado: { opacity: 0.6 },
+  fotoItemPronta: { flexDirection: 'row', alignItems: 'flex-start' },
+  miniaturaItem: { width: 48, height: 48, borderRadius: 8, backgroundColor: '#e2e8f0' },
+  removerFotoItem: {
+    marginLeft: -10,
+    marginTop: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#475569',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removerFotoItemTexto: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  fundoModalFoto: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+  fotoAmpliadaModal: { width: '100%', height: '85%' },
   rodape: { padding: 16, borderTopWidth: 1, borderTopColor: '#e2e8f0', backgroundColor: '#fff' },
   botaoEnviar: { backgroundColor: '#0d9488', borderRadius: 10, height: 48, alignItems: 'center', justifyContent: 'center' },
   botaoDesabilitado: { opacity: 0.4 },

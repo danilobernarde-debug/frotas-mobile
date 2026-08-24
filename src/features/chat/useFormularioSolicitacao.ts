@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { capturarFoto } from '../../camera/capturarFoto'
-import { obterLocalizacaoAtual, type LocalCapturado } from '../../lib/localizacao'
+import { useState } from 'react'
+import { useCapturaComLocal } from '../../camera/useCapturaComLocal'
 import type { CategoriaSolicitacao, Veiculo } from '../../lib/tipos'
 import { TIPO_NOVA_SOLICITACAO, type FotoPayload, type NovaSolicitacaoPayload } from '../../outbox/handlers/novaSolicitacao'
 import { enfileirar } from '../../outbox/outbox'
@@ -37,65 +36,20 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   const [odometro, setOdometro] = useState('')
   const [valor, setValor] = useState('')
   const [fotos, setFotos] = useState<FotoCapturada[]>([])
-  const [capturando, setCapturando] = useState(false)
   const [enviando, setEnviando] = useState(false)
-
-  // Dispara assim que a tela abre -- antes até do veículo ser escolhido.
-  // Duas razões: (1) dá tempo de sobra pra já estar resolvido quando
-  // chegar nas fotos; (2) principalmente, evita pedir permissão de
-  // localização logo depois que a câmera fecha -- no Expo Go isso trava o
-  // diálogo do sistema pra sempre (bug real visto em teste, tanto Android
-  // quanto iOS). Uma chamada só, reaproveitada por todas as fotos do
-  // formulário: é o mesmo local no mesmo minuto, não faz sentido buscar
-  // de novo a cada uma. `iniciada` (não só o dependency array) evita
-  // disparar de novo no duplo-mount que o modo de desenvolvimento do
-  // React faz de propósito (confirmado em teste: sem essa guarda,
-  // obterLocalizacaoAtual() rodava 2x em paralelo).
-  const localizacaoPromise = useRef<Promise<LocalCapturado | null> | null>(null)
-  const localizacaoIniciada = useRef(false)
-  useEffect(() => {
-    if (!localizacaoIniciada.current) {
-      localizacaoIniciada.current = true
-      localizacaoPromise.current = obterLocalizacaoAtual()
-    }
-  }, [])
-
-  /** Tira uma foto e já resolve a localização (que começou a buscar lá no
-   *  início da tela -- aqui só espera o que já estava em andamento, nunca
-   *  inicia um pedido novo logo depois da câmera fechar). Carimba no
-   *  momento da captura, não do envio -- importa num app offline-first,
-   *  onde a foto pode subir horas depois. Null se o usuário cancelar a
-   *  captura. */
-  async function capturarFotoComLocal(): Promise<Omit<FotoCapturada, 'tipoFoto'> | null> {
-    setCapturando(true)
-    const uri = await capturarFoto()
-    if (!uri) {
-      setCapturando(false)
-      return null
-    }
-    const capturadaEm = new Date().toISOString()
-    const local = await (localizacaoPromise.current ?? Promise.resolve(null))
-    setCapturando(false)
-    return {
-      uriLocal: uri,
-      capturadaEm,
-      latitude: local?.latitude,
-      longitude: local?.longitude,
-      localizacaoRotulo: local?.rotulo ?? undefined,
-    }
-  }
+  const { capturando, capturar } = useCapturaComLocal()
 
   /** Uma das 3 fotos fixas do abastecimento -- tirar de novo substitui só
    *  a foto daquele tipo, as outras 2 continuam como estavam. */
   async function tirarFotoSlot(tipoFoto: string) {
-    const foto = await capturarFotoComLocal()
+    const foto = await capturar()
     if (!foto) return
     setFotos((atual) => [...atual.filter((f) => f.tipoFoto !== tipoFoto), { tipoFoto, ...foto }])
   }
 
   /** Lista aberta (manutenção) -- cada toque soma mais uma foto. */
   async function tirarFotoMultipla() {
-    const foto = await capturarFotoComLocal()
+    const foto = await capturar()
     if (!foto) return
     setFotos((atual) => [...atual, { tipoFoto: 'PROBLEMA', ...foto }])
   }
@@ -104,7 +58,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
    *  identifica qual pela uri local (não tem slot fixo pra identificar,
    *  diferente de tirarFotoSlot). */
   async function substituirFotoMultipla(uriLocalAntigo: string) {
-    const foto = await capturarFotoComLocal()
+    const foto = await capturar()
     if (!foto) return
     setFotos((atual) =>
       atual.map((f) => (f.uriLocal === uriLocalAntigo ? { tipoFoto: 'PROBLEMA', ...foto } : f)),

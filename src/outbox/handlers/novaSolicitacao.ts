@@ -8,7 +8,13 @@ import type { ContextoEnvio, ResultadoEnvio } from '../types'
 
 export interface FotoPayload {
   uriLocal: string
-  tipo: string
+  /** Só faz sentido pra fotos de aprovação (BOMBA/PLACA/KM/PROBLEMA) --
+   *  frota_checklist_fotos nem tem essa coluna, por isso opcional aqui. */
+  tipo?: string
+  /** Só faz sentido pra fotos de checklist -- identifica qual dos 20
+   *  itens esta foto documenta (ver frota_checklist_fotos.item_id,
+   *  0024_checklist_foto_item.sql). Nulo/ausente em fotos de aprovação. */
+  itemId?: number
   legenda?: string
   status: 'pendente' | 'enviado'
   /** Alimentam a marca d'água no servidor (fotos do abastecimento e da

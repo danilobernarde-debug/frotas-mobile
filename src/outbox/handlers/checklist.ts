@@ -98,8 +98,13 @@ async function enviar(
         alvo: 'checklists',
         idPai: checklistId,
         uriArquivo: foto.uriLocal,
+        itemId: foto.itemId,
         legenda: foto.legenda,
         tokenAcesso: token,
+        capturadaEm: foto.capturadaEm,
+        latitude: foto.latitude,
+        longitude: foto.longitude,
+        localizacaoRotulo: foto.localizacaoRotulo,
       })
     } catch (e) {
       const mensagem = e instanceof Error ? e.message : String(e)
