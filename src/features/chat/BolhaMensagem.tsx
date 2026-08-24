@@ -9,8 +9,10 @@ import type { EntradaChat, RespondendoA } from './types'
  * perfil logado (seguro porque o RLS mobile já restringe a consulta à
  * própria thread).
  *
- * Mostra o nome de quem escreveu em toda mensagem, dos dois lados -- não
- * só nas respostas da gestão.
+ * Mostra o nome só nas respostas da gestão (pode ser mais de um
+ * gestor/admin respondendo na mesma thread) -- a própria mensagem do
+ * encarregado não precisa, é sempre a mesma pessoa logada (mesmo padrão
+ * já usado em /atividade no painel web).
  *
  * `citacao`/`aoResponder`/`aoIrParaOriginal`: suporte a responder uma
  * mensagem ou solicitação específica, estilo WhatsApp -- toque longo
@@ -43,9 +45,9 @@ export function BolhaMensagem({
     const nomeAutor = minhaPropria ? (perfil?.nome ?? 'Você') : (m.autor?.nome ?? 'Gestão de frotas')
     return (
       <View style={[styles.linha, minhaPropria ? styles.linhaDireita : styles.linhaEsquerda]}>
-        <Text style={[styles.autor, minhaPropria ? styles.autorDireita : styles.autorEsquerda]}>
-          {nomeAutor}
-        </Text>
+        {!minhaPropria && (
+          <Text style={[styles.autor, styles.autorEsquerda]}>{nomeAutor}</Text>
+        )}
         <Pressable
           onLongPress={
             aoResponder &&
@@ -89,7 +91,6 @@ export function BolhaMensagem({
   const item = entrada.item
   return (
     <View style={[styles.linha, styles.linhaDireita]}>
-      <Text style={[styles.autor, styles.autorDireita]}>{perfil?.nome ?? 'Você'}</Text>
       <View style={[styles.bolha, styles.bolhaPropria, styles.bolhaLocal]}>
         <Text style={styles.textoProprio}>{item.payload.texto}</Text>
         {item.permanente && item.erroMsg && <Text style={styles.erroMsg}>{item.erroMsg}</Text>}
@@ -112,7 +113,6 @@ const styles = StyleSheet.create({
   linhaEsquerda: { alignSelf: 'flex-start' },
   autor: { fontSize: 11, fontWeight: '700', color: '#0f766e', marginBottom: 2 },
   autorEsquerda: { marginLeft: 4 },
-  autorDireita: { marginRight: 4, textAlign: 'right' },
   bolha: { borderRadius: 14, paddingVertical: 8, paddingHorizontal: 12 },
   bolhaOutro: { backgroundColor: '#e2e8f0', borderBottomLeftRadius: 4 },
   bolhaPropria: { backgroundColor: '#0d9488', borderBottomRightRadius: 4 },
