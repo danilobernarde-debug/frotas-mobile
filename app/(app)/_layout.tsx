@@ -47,6 +47,7 @@ export default function LayoutApp() {
       <Stack.Screen name="chat" />
       <Stack.Screen name="checklists" />
       <Stack.Screen name="solicitacao/[id]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="nova-solicitacao" options={{ presentation: 'modal' }} />
     </Stack>
   )
 }

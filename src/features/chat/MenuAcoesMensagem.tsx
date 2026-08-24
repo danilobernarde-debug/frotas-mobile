@@ -12,8 +12,8 @@ const MARGEM_TELA = 10
 /**
  * Menu suspenso estilo WhatsApp: aparece perto do ponto tocado (toque
  * longo numa bolha), não centralizado como os outros modais do app
- * (CabecalhoApp, foto ampliada em ConteudoFluxo.tsx) -- por isso calcula
- * a própria posição em vez de reaproveitar aqueles.
+ * (CabecalhoApp, foto ampliada em nova-solicitacao.tsx) -- por isso
+ * calcula a própria posição em vez de reaproveitar aqueles.
  */
 export function MenuAcoesMensagem({
   visivel,

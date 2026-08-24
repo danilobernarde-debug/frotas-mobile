@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Animated,
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -17,12 +17,10 @@ import { useAuth } from '../../src/auth/useAuth'
 import { BarraEntrada } from '../../src/features/chat/BarraEntrada'
 import { BolhaMensagem } from '../../src/features/chat/BolhaMensagem'
 import { BolhaSolicitacao, ROTULO_CATEGORIA } from '../../src/features/chat/BolhaSolicitacao'
-import { ConteudoFluxo } from '../../src/features/chat/ConteudoFluxo'
 import { inserirDivisoresData } from '../../src/features/chat/divisoresData'
 import { MenuAcoesMensagem } from '../../src/features/chat/MenuAcoesMensagem'
 import type { EntradaChat, RespondendoA } from '../../src/features/chat/types'
 import { useDivisorNaoLidas } from '../../src/features/chat/useDivisorNaoLidas'
-import { useFluxoSolicitacao } from '../../src/features/chat/useFluxoSolicitacao'
 import { useMinhasSolicitacoes } from '../../src/features/chat/useMinhasSolicitacoes'
 import { diaRelativo } from '../../src/lib/formato'
 import type { Aprovacao, CategoriaSolicitacao, Mensagem } from '../../src/lib/tipos'
@@ -35,54 +33,14 @@ import { CabecalhoApp } from '../../src/ui/CabecalhoApp'
  *  sozinho pouco depois de parar. */
 const TEMPO_VISIVEL_SELO_DATA_MS = 1200
 
-/** Um roteiro por vez. Isolado num componente próprio, remontado com uma
- *  `key` nova a cada início (mesmo repetindo a mesma categoria) -- é o
- *  jeito de garantir que useFluxoSolicitacao() sempre nasce do zero,
- *  nunca herda veículo/foto/descrição de uma tentativa cancelada antes. */
-function SecaoFluxo({
-  categoria,
-  onNovaCategoria,
-  onConcluido,
-  onCancelar,
-}: {
-  categoria: CategoriaSolicitacao
-  onNovaCategoria: (categoria: CategoriaSolicitacao) => void
-  onConcluido: () => void
-  onCancelar: () => void
-}) {
-  const fluxo = useFluxoSolicitacao(categoria)
-  return (
-    <>
-      {/* "Cancelar" fica sempre visível enquanto o roteiro está aberto --
-          antes só existia "Voltar", que nem aparecia no primeiro passo,
-          então não tinha como sair de uma solicitação iniciada por
-          engano sem preencher tudo até o fim. */}
-      <View style={styles.barraFluxo}>
-        {fluxo.passoAtual > 0 ? (
-          <Pressable onPress={fluxo.voltar} hitSlop={10}>
-            <Text style={styles.voltarTexto}>← Voltar</Text>
-          </Pressable>
-        ) : (
-          <View />
-        )}
-        <Pressable onPress={onCancelar} hitSlop={10}>
-          <Text style={styles.cancelarTexto}>Cancelar</Text>
-        </Pressable>
-      </View>
-      <ConteudoFluxo fluxo={fluxo} />
-      <BarraEntrada fluxo={fluxo} onNovaCategoria={onNovaCategoria} onConcluido={onConcluido} />
-    </>
-  )
-}
-
 export default function TelaChat() {
+  const router = useRouter()
   const { perfil } = useAuth()
   const { entradas, carregando, recarregar } = useMinhasSolicitacoes()
   const entradasComDivisor = useDivisorNaoLidas(inserirDivisoresData(entradas))
   const { pendentes, sincronizando } = useSyncStatus()
   const conectado = useNetworkStatus()
 
-  const [fluxoInfo, setFluxoInfo] = useState<{ categoria: CategoriaSolicitacao; chave: number } | null>(null)
   const [respondendoA, setRespondendoA] = useState<RespondendoA | null>(null)
   // Menu suspenso estilo WhatsApp aberto por toque longo -- guarda o alvo
   // (mensagem ou solicitação) e o ponto da tela onde o dedo tocou, pra
@@ -128,8 +86,17 @@ export default function TelaChat() {
     return null
   }
 
-  const proximaChave = useRef(0)
   const listaRef = useRef<FlatList<EntradaChat>>(null)
+
+  // A tela de nova solicitação abre por cima do chat (Stack modal) sem
+  // desmontá-lo -- ao voltar, o próprio chat continua montado e "recarregar"
+  // não dispara sozinho. useFocusEffect cobre isso (e de brinde também o
+  // retorno de solicitacao/[id], que tinha a mesma lacuna).
+  useFocusEffect(
+    useCallback(() => {
+      recarregar()
+    }, [recarregar]),
+  )
 
   /** Rola até o item original a partir de um toque na citação -- sem
    *  getItemLayout (os itens têm alturas bem diferentes: divisor, bolha
@@ -226,9 +193,8 @@ export default function TelaChat() {
         ? `${pendentes} pendente(s)`
         : 'Tudo sincronizado'
 
-  function iniciarFluxo(categoria: CategoriaSolicitacao) {
-    proximaChave.current += 1
-    setFluxoInfo({ categoria, chave: proximaChave.current })
+  function iniciarFormulario(categoria: CategoriaSolicitacao) {
+    router.push({ pathname: '/(app)/nova-solicitacao', params: { categoria } })
   }
 
   return (
@@ -280,7 +246,7 @@ export default function TelaChat() {
             viewabilityConfig={configuracaoVisibilidade}
             onScrollToIndexFailed={aoFalharScrollParaIndice}
             ListEmptyComponent={
-              !carregando && !fluxoInfo ? (
+              !carregando ? (
                 <View style={styles.vazio}>
                   <Text style={styles.vazioTexto}>
                     Nenhuma solicitação ou mensagem ainda. Toque em + pra pedir algo, ou escreva abaixo.
@@ -302,26 +268,12 @@ export default function TelaChat() {
           )}
         </View>
 
-        {fluxoInfo ? (
-          <SecaoFluxo
-            key={fluxoInfo.chave}
-            categoria={fluxoInfo.categoria}
-            onNovaCategoria={iniciarFluxo}
-            onConcluido={() => {
-              setFluxoInfo(null)
-              recarregar()
-            }}
-            onCancelar={() => setFluxoInfo(null)}
-          />
-        ) : (
-          <BarraEntrada
-            fluxo={null}
-            onNovaCategoria={iniciarFluxo}
-            onConcluido={recarregar}
-            respondendoA={respondendoA}
-            aoLimparResposta={() => setRespondendoA(null)}
-          />
-        )}
+        <BarraEntrada
+          onNovaCategoria={iniciarFormulario}
+          onConcluido={recarregar}
+          respondendoA={respondendoA}
+          aoLimparResposta={() => setRespondendoA(null)}
+        />
       </KeyboardAvoidingView>
 
       <MenuAcoesMensagem
@@ -352,13 +304,4 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   seloDataTexto: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  barraFluxo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-  },
-  voltarTexto: { color: '#64748b', fontWeight: '600', fontSize: 13 },
-  cancelarTexto: { color: '#be123c', fontWeight: '600', fontSize: 13 },
 })

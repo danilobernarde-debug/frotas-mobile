@@ -66,7 +66,7 @@ async function obterLocalizacaoInterno(): Promise<LocalCapturado | null> {
  * função INTEIRA tem um teto: não importa qual etapa emperrar, depois de
  * TEMPO_MAXIMO_TOTAL_MS o fluxo sempre segue em frente. Como quem chama
  * isto já dispara a busca bem antes de precisar do resultado (ver
- * useFluxoSolicitacao.ts), esse teto quase nunca é sentido pelo usuário.
+ * useFormularioSolicitacao.ts), esse teto quase nunca é sentido pelo usuário.
  */
 export async function obterLocalizacaoAtual(): Promise<LocalCapturado | null> {
   try {

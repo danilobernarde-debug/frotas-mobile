@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import type { CategoriaSolicitacao } from '../../lib/tipos'
 import { TIPO_MENSAGEM, type MensagemPayload } from '../../outbox/handlers/mensagem'
@@ -6,72 +6,32 @@ import { enfileirar } from '../../outbox/outbox'
 import { runSync } from '../../outbox/syncEngine'
 import { MenuAnexo } from './MenuAnexo'
 import type { RespondendoA } from './types'
-import type { FluxoSolicitacao } from './useFluxoSolicitacao'
 
 /**
  * Rodapé estilo WhatsApp: "+" à esquerda (abre o menu de tipo de
- * solicitação), campo de texto no meio, ícone de ação à direita.
- *
- * Sem fluxo ativo (`fluxo === null`), o campo é uma mensagem livre pra
- * gestão de frotas -- digitar e tocar em ➤ enfileira e limpa, sem
- * precisar de nenhum roteiro guiado. Com fluxo ativo, o campo continua
- * 100% contextual ao passo (como já era): só responde ao que aquele
- * passo pede (descrição, valor, confirmar), nunca tenta "entender" um
- * texto qualquer -- os dois modos não se confundem porque o estado
- * ocioso e o fluxo ativo são duas instâncias montadas separadamente
- * (troca por `key` em chat.tsx), o texto digitado num nunca vaza pro outro.
+ * solicitação -- que agora navega pra tela cheia de formulário, não
+ * inicia mais um roteiro guiado dentro do próprio chat), campo de texto
+ * no meio, ícone de enviar à direita. O campo é sempre mensagem livre pra
+ * gestão de frotas -- digitar e tocar em ➤ enfileira e limpa.
  */
 export function BarraEntrada({
-  fluxo,
   onNovaCategoria,
   onConcluido,
   respondendoA,
   aoLimparResposta,
 }: {
-  fluxo: FluxoSolicitacao | null
   onNovaCategoria: (categoria: CategoriaSolicitacao) => void
   onConcluido: () => void
-  /** Só faz sentido no estado ocioso (fluxo === null) -- responder uma
-   *  mensagem é mensagem livre, não faz parte do roteiro guiado. */
   respondendoA?: RespondendoA | null
   aoLimparResposta?: () => void
 }) {
   const [texto, setTexto] = useState('')
-  const [enviandoMensagem, setEnviandoMensagem] = useState(false)
+  const [enviando, setEnviando] = useState(false)
 
-  // Limpa o campo ao trocar de passo -- o texto do passo anterior não
-  // deve "vazar" pro próximo.
-  useEffect(() => {
-    setTexto('')
-  }, [fluxo?.passo.id])
-
-  const passo = fluxo?.passo
-
-  let placeholder = 'Escreva uma mensagem…'
-  let editavel = true
-  let tecladoNumerico = false
-  if (passo?.tipo === 'texto') {
-    placeholder = passo.pergunta
-    editavel = true
-  } else if (passo?.tipo === 'valor' || passo?.tipo === 'km') {
-    placeholder = passo.pergunta
-    editavel = true
-    tecladoNumerico = true
-  } else if (passo?.tipo === 'veiculo') {
-    placeholder = 'Escolha um veículo acima ↑'
-    editavel = false
-  } else if (passo?.tipo === 'fotos_abastecimento' || passo?.tipo === 'foto_multipla') {
-    placeholder = 'Toque em 📷 acima ↑'
-    editavel = false
-  } else if (passo?.tipo === 'confirmar') {
-    placeholder = 'Revise a solicitação acima ↑'
-    editavel = false
-  }
-
-  async function enviarMensagemLivre() {
+  async function aoTocarEnviar() {
     const digitado = texto.trim()
     if (!digitado) return
-    setEnviandoMensagem(true)
+    setEnviando(true)
     await enfileirar<MensagemPayload>(TIPO_MENSAGEM, {
       texto: digitado,
       respondendoA: respondendoA?.tipo === 'mensagem' ? respondendoA.id : undefined,
@@ -79,56 +39,16 @@ export function BarraEntrada({
     })
     runSync()
     setTexto('')
-    setEnviandoMensagem(false)
+    setEnviando(false)
     aoLimparResposta?.()
     onConcluido()
   }
 
-  async function aoTocarEnviar() {
-    if (!fluxo) {
-      await enviarMensagemLivre()
-      return
-    }
-    if (!passo) return
-
-    if (passo.tipo === 'confirmar') {
-      if (!fluxo.podeConfirmar) return
-      await fluxo.enviarSolicitacao()
-      onConcluido()
-      return
-    }
-
-    if (passo.tipo === 'texto' || passo.tipo === 'valor' || passo.tipo === 'km') {
-      fluxo.enviarTexto(texto)
-      return
-    }
-
-    if (passo.tipo === 'foto_multipla' || passo.tipo === 'fotos_abastecimento') {
-      fluxo.avancar()
-    }
-  }
-
-  // fotos_abastecimento: só habilita quando TODAS as fotos fixas do passo
-  // (lidas do próprio passo, não repetidas aqui -- ver fluxo.ts) já foram
-  // tiradas, não só uma qualquer (diferente de foto_multipla, onde 1 já basta).
-  const todasFotosFixasProntas = Boolean(
-    fluxo && passo?.tipo === 'fotos_abastecimento' && passo.slots?.every((s) => fluxo.fotos.some((f) => f.tipoFoto === s.tipoFoto)),
-  )
-
-  const habilitaEnviar = fluxo
-    ? passo?.tipo === 'valor' ||
-      ((passo?.tipo === 'texto' || passo?.tipo === 'km') && texto.trim().length > 0) ||
-      (passo?.tipo === 'foto_multipla' && fluxo.fotos.length > 0) ||
-      todasFotosFixasProntas ||
-      (passo?.tipo === 'confirmar' && fluxo?.podeConfirmar)
-    : texto.trim().length > 0
-
-  const iconeEnviar = passo?.tipo === 'confirmar' ? '✓' : '➤'
-  const enviandoAlgo = fluxo?.enviando || enviandoMensagem
+  const habilitaEnviar = texto.trim().length > 0
 
   return (
     <View>
-      {!fluxo && respondendoA && (
+      {respondendoA && (
         <View style={styles.respondendoBarra}>
           <View style={styles.respondendoLinha} />
           <View style={styles.respondendoInfo}>
@@ -144,22 +64,14 @@ export function BarraEntrada({
       )}
 
       <View style={styles.barra}>
-        {/* Desabilita "+" também enquanto há rascunho não enviado no campo
-            -- sem isso, tocar em + no meio de digitar uma mensagem
-            descarta o texto em silêncio (a barra ociosa desmonta ao trocar
-            pro fluxo guiado). Força "envie ou limpe antes de iniciar um
-            novo pedido" em vez de perder o rascunho sem aviso. */}
-        <MenuAnexo onEscolher={onNovaCategoria} desabilitado={Boolean(fluxo) || texto.trim().length > 0} />
+        <MenuAnexo onEscolher={onNovaCategoria} />
 
         <TextInput
-          style={[styles.campo, !editavel && styles.campoDesabilitado]}
+          style={styles.campo}
           value={texto}
           onChangeText={setTexto}
-          placeholder={placeholder}
+          placeholder="Escreva uma mensagem…"
           placeholderTextColor="#94a3b8"
-          editable={editavel}
-          pointerEvents={editavel ? 'auto' : 'none'}
-          keyboardType={tecladoNumerico ? 'decimal-pad' : 'default'}
           // multiline: o campo cresce junto com o texto (até maxHeight, depois
           // rola por dentro) -- igual WhatsApp. returnKeyType="send" +
           // onSubmitEditing (versão anterior) fazia o Enter DISPARAR o envio
@@ -171,14 +83,10 @@ export function BarraEntrada({
 
         <Pressable
           onPress={aoTocarEnviar}
-          disabled={!habilitaEnviar || enviandoAlgo}
-          style={[styles.botaoEnviar, (!habilitaEnviar || enviandoAlgo) && styles.botaoDesabilitado]}
+          disabled={!habilitaEnviar || enviando}
+          style={[styles.botaoEnviar, (!habilitaEnviar || enviando) && styles.botaoDesabilitado]}
         >
-          {enviandoAlgo ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.iconeEnviar}>{iconeEnviar}</Text>
-          )}
+          {enviando ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.iconeEnviar}>➤</Text>}
         </Pressable>
       </View>
     </View>
@@ -229,12 +137,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#fff',
     color: '#0f172a',
-  },
-  campoDesabilitado: {
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-    color: '#94a3b8',
-    fontStyle: 'italic',
   },
   botaoEnviar: {
     width: 44,

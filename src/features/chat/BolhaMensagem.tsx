@@ -7,9 +7,7 @@ import type { EntradaChat, RespondendoA } from './types'
  * Alinha a mensagem à direita se foi o próprio encarregado que escreveu,
  * à esquerda se é resposta da gestão -- comparando autor_id com o
  * perfil logado (seguro porque o RLS mobile já restringe a consulta à
- * própria thread). Reaproveita o visual de bolha cinza à esquerda que
- * ConteudoFluxo.tsx já usa pras perguntas do roteiro, em vez de inventar
- * um estilo novo pra "resposta recebida".
+ * própria thread).
  *
  * Mostra o nome de quem escreveu em toda mensagem, dos dois lados -- não
  * só nas respostas da gestão.
