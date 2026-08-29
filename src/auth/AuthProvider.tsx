@@ -13,14 +13,69 @@ export interface EstadoAuth {
 
 export const AuthContext = createContext<EstadoAuth | null>(null)
 
+const TEMPO_LIMITE_PERFIL_MS = 8000
+
+// PromiseLike, não Promise: o builder de consulta do Supabase (PostgrestBuilder)
+// é "thenable" mas não é uma instância de Promise de verdade (não tem
+// .catch()/.finally()) -- só precisamos do .then() aqui mesmo.
+function comTempoLimite<T>(promessa: PromiseLike<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const temporizador = setTimeout(() => reject(new Error('Tempo esgotado.')), ms)
+    promessa.then(
+      (valor) => { clearTimeout(temporizador); resolve(valor) },
+      (erro) => { clearTimeout(temporizador); reject(erro) },
+    )
+  })
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessao, setSessao] = useState<Session | null>(null)
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [carregando, setCarregando] = useState(true)
 
   async function carregarPerfil(userId: string) {
-    const { data } = await supabase.from('frota_perfis').select('*').eq('id', userId).single()
-    setPerfil((data as Perfil) ?? null)
+    // Junta o nome do motorista vinculado (se houver) numa tacada só --
+    // é só pra exibir na tela de nova solicitação/checklist, não precisa
+    // de uma consulta separada. !frota_perfis_motorista_id_fkey desambigua
+    // de propósito: frota_motoristas também tem criado_por apontando pra
+    // frota_perfis (autoria, trg_motoristas_autor), então sem indicar qual
+    // das duas relações usar o PostgREST recusa a consulta com "Could not
+    // embed because more than one relationship was found" (achado real,
+    // travava o app inteiro no spinner de carregando -- ver abaixo).
+    //
+    // Tempo limite + repescagem sem o embed: PGRST201 acima não lança
+    // exceção (só error preenchido), por isso o `if (error) throw` --
+    // assim qualquer motivo de falha (esse, rede instável, RLS) cai no
+    // mesmo caminho de retentativa, em vez de perfil ficar null pra
+    // sempre e (app)/_layout.tsx preso no spinner achando que ainda tá
+    // carregando.
+    try {
+      const { data, error } = await comTempoLimite(
+        supabase
+          .from('frota_perfis')
+          .select('*, motorista:frota_motoristas!frota_perfis_motorista_id_fkey(nome)')
+          .eq('id', userId)
+          .single(),
+        TEMPO_LIMITE_PERFIL_MS,
+      )
+      if (error) throw error
+      if (!data) {
+        setPerfil(null)
+        return
+      }
+      const { motorista, ...perfil } = data as Perfil & { motorista: { nome: string } | null }
+      setPerfil({ ...perfil, motoristaNome: motorista?.nome ?? null })
+    } catch {
+      try {
+        const { data } = await comTempoLimite(
+          supabase.from('frota_perfis').select('*').eq('id', userId).single(),
+          TEMPO_LIMITE_PERFIL_MS,
+        )
+        setPerfil(data ? { ...(data as Perfil), motoristaNome: null } : null)
+      } catch {
+        setPerfil(null)
+      }
+    }
   }
 
   useEffect(() => {

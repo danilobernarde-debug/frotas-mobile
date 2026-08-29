@@ -13,7 +13,11 @@ export interface Perfil {
   email: string
   papel: PapelUsuario
   regional_id: number | null
+  motorista_id: number | null
   ativo: boolean
+  /** Nome do motorista vinculado (motorista_id) -- preenchido à parte no
+   *  AuthProvider, não vem do `select('*')` de frota_perfis. */
+  motoristaNome?: string | null
 }
 
 export interface Veiculo {
