@@ -12,7 +12,9 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useAuth } from '../../../src/auth/useAuth'
 import { useCapturaComLocal, type FotoComLocal } from '../../../src/camera/useCapturaComLocal'
+import { PreviaMarcaDagua } from '../../../src/camera/PreviaMarcaDagua'
 import { useItensChecklist } from '../../../src/features/checklists/useItensChecklist'
 import { useVeiculos } from '../../../src/features/veiculos/useVeiculos'
 import type { Veiculo } from '../../../src/lib/tipos'
@@ -25,6 +27,7 @@ type Valor = 'sim' | 'nao' | 'na' | null
 
 export default function TelaNovoChecklist() {
   const router = useRouter()
+  const { perfil } = useAuth()
   const { veiculos } = useVeiculos()
   const { itens, carregando: carregandoItens } = useItensChecklist()
   const { capturar } = useCapturaComLocal()
@@ -49,7 +52,26 @@ export default function TelaNovoChecklist() {
 
   async function tirarFotoItem(itemId: number) {
     setCapturandoItemId(itemId)
-    const foto = await capturar()
+    const foto = await capturar((uri, local) => {
+      // Localização pode terminar depois da foto já estar na tela (ver
+      // capturar() em useCapturaComLocal) -- casa por uri, não por
+      // itemId: outra foto de outro item pode ter sido tirada nesse meio
+      // tempo, itemId sozinho arriscaria completar a errada.
+      if (!local) return
+      setFotosPorItem((atual) => {
+        const atualDoItem = atual[itemId]
+        if (!atualDoItem || atualDoItem.uriLocal !== uri) return atual
+        return {
+          ...atual,
+          [itemId]: {
+            ...atualDoItem,
+            latitude: local.latitude,
+            longitude: local.longitude,
+            localizacaoRotulo: local.rotulo ?? undefined,
+          },
+        }
+      })
+    })
     setCapturandoItemId(null)
     if (!foto) return
     setFotosPorItem((atual) => ({ ...atual, [itemId]: foto }))
@@ -111,6 +133,7 @@ export default function TelaNovoChecklist() {
 
     const payload: ChecklistPayload = {
       veiculoId: veiculo.id,
+      motoristaId: perfil?.motorista_id ?? undefined,
       odometro: Number(odometro.replace(',', '.')) || undefined,
       respostas: listaRespostas,
       fotos,
@@ -136,6 +159,10 @@ export default function TelaNovoChecklist() {
       </View>
 
       <ScrollView contentContainerStyle={styles.conteudo}>
+        {perfil?.motoristaNome && (
+          <Text style={styles.motoristaVinculado}>🚗 Motorista: {perfil.motoristaNome}</Text>
+        )}
+
         <Text style={styles.rotulo}>Veículo</Text>
         {mostrarListaVeiculos ? (
           <>
@@ -256,7 +283,25 @@ export default function TelaNovoChecklist() {
 
       <Modal visible={fotoAberta !== null} transparent animationType="fade" onRequestClose={() => setFotoAberta(null)}>
         <Pressable style={styles.fundoModalFoto} onPress={() => setFotoAberta(null)}>
-          {fotoAberta && <Image source={{ uri: fotoAberta }} style={styles.fotoAmpliadaModal} resizeMode="contain" />}
+          {fotoAberta && (
+            <View style={styles.fotoAmpliadaContainer}>
+              <Image source={{ uri: fotoAberta }} style={styles.fotoAmpliadaModal} resizeMode="contain" />
+              {(() => {
+                const foto = Object.values(fotosPorItem).find((f) => f.uriLocal === fotoAberta)
+                if (!foto) return null
+                return (
+                  <PreviaMarcaDagua
+                    capturadaEm={foto.capturadaEm}
+                    nomeMotorista={perfil?.motoristaNome}
+                    placa={veiculo?.placa}
+                    latitude={foto.latitude}
+                    longitude={foto.longitude}
+                    localizacaoRotulo={foto.localizacaoRotulo}
+                  />
+                )
+              })()}
+            </View>
+          )}
         </Pressable>
       </Modal>
 
@@ -310,6 +355,16 @@ const styles = StyleSheet.create({
   iconeVoltar: { fontSize: 22, color: '#0f172a', fontWeight: '600' },
   tituloCabecalho: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   conteudo: { padding: 16, paddingBottom: 24 },
+  motoristaVinculado: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0f766e',
+    backgroundColor: '#f0fdfa',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+  },
   rotulo: { fontSize: 13, fontWeight: '700', color: '#334155', marginTop: 14, marginBottom: 6 },
   listaVeiculos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   vazio: { color: '#94a3b8', fontStyle: 'italic' },
@@ -368,7 +423,8 @@ const styles = StyleSheet.create({
   },
   removerFotoItemTexto: { color: '#fff', fontSize: 11, fontWeight: '700' },
   fundoModalFoto: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
-  fotoAmpliadaModal: { width: '100%', height: '85%' },
+  fotoAmpliadaContainer: { width: '100%', height: '85%' },
+  fotoAmpliadaModal: { width: '100%', height: '100%' },
   rodape: { padding: 16, borderTopWidth: 1, borderTopColor: '#e2e8f0', backgroundColor: '#fff' },
   botaoEnviar: { backgroundColor: '#0d9488', borderRadius: 10, height: 48, alignItems: 'center', justifyContent: 'center' },
   botaoDesabilitado: { opacity: 0.4 },

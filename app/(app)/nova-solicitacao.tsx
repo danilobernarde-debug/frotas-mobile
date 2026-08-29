@@ -14,10 +14,12 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { PreviaMarcaDagua } from '../../src/camera/PreviaMarcaDagua'
 import { SLOTS_ABASTECIMENTO } from '../../src/features/chat/fluxo'
 import { useFormularioSolicitacao } from '../../src/features/chat/useFormularioSolicitacao'
 import { useVeiculos } from '../../src/features/veiculos/useVeiculos'
-import type { CategoriaSolicitacao } from '../../src/lib/tipos'
+import { moeda } from '../../src/lib/formato'
+import { TIPOS_COMBUSTIVEL, type CategoriaSolicitacao } from '../../src/lib/tipos'
 
 const TITULOS: Partial<Record<CategoriaSolicitacao, string>> = {
   ABASTECIMENTO: 'Novo abastecimento',
@@ -72,6 +74,10 @@ export default function TelaNovaSolicitacao() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled">
+          {formulario.motoristaNome && (
+            <Text style={styles.motoristaVinculado}>🚗 Motorista: {formulario.motoristaNome}</Text>
+          )}
+
           <Text style={styles.rotulo}>Veículo</Text>
           {mostrarListaVeiculos ? (
             <>
@@ -129,6 +135,47 @@ export default function TelaNovaSolicitacao() {
                 placeholder="Ex.: 128500"
                 placeholderTextColor="#94a3b8"
               />
+
+              <Text style={styles.rotulo}>Combustível</Text>
+              <View style={styles.listaVeiculos}>
+                {TIPOS_COMBUSTIVEL.map((c) => (
+                  <Pressable
+                    key={c}
+                    onPress={() => formulario.setTipoCombustivel(c)}
+                    style={[styles.chip, formulario.tipoCombustivel === c && styles.chipSelecionado]}
+                  >
+                    <Text style={[styles.chipTexto, formulario.tipoCombustivel === c && styles.chipTextoSelecionado]}>
+                      {c}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={styles.rotulo}>Litros</Text>
+              <TextInput
+                style={styles.input}
+                value={formulario.litros}
+                onChangeText={formulario.setLitros}
+                keyboardType="decimal-pad"
+                placeholder="Ex.: 40,5"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.rotulo}>Preço por litro</Text>
+              <TextInput
+                style={styles.input}
+                value={formulario.precoLitro}
+                onChangeText={formulario.setPrecoLitro}
+                keyboardType="decimal-pad"
+                placeholder="R$"
+                placeholderTextColor="#94a3b8"
+              />
+
+              {formulario.valorAbastecimento > 0 && (
+                <Text style={styles.valorCalculado}>
+                  Total: {moeda(formulario.valorAbastecimento)}
+                </Text>
+              )}
             </>
           ) : (
             <>
@@ -141,18 +188,18 @@ export default function TelaNovaSolicitacao() {
                 placeholderTextColor="#94a3b8"
                 multiline
               />
+
+              <Text style={styles.rotulo}>Valor estimado (opcional)</Text>
+              <TextInput
+                style={styles.input}
+                value={formulario.valor}
+                onChangeText={formulario.setValor}
+                keyboardType="decimal-pad"
+                placeholder="R$"
+                placeholderTextColor="#94a3b8"
+              />
             </>
           )}
-
-          <Text style={styles.rotulo}>Valor estimado (opcional)</Text>
-          <TextInput
-            style={styles.input}
-            value={formulario.valor}
-            onChangeText={formulario.setValor}
-            keyboardType="decimal-pad"
-            placeholder="R$"
-            placeholderTextColor="#94a3b8"
-          />
 
           <Text style={styles.rotulo}>Fotos</Text>
           <View style={styles.listaFotos}>
@@ -162,8 +209,10 @@ export default function TelaNovaSolicitacao() {
                   return foto ? (
                     <LinhaFotoPronta
                       key={slot.tipoFoto}
-                      uri={foto.uriLocal}
+                      foto={foto}
                       rotulo={slot.rotulo}
+                      nomeMotorista={formulario.motoristaNome}
+                      placa={formulario.veiculo?.placa}
                       aoAbrir={() => setFotoAberta(foto.uriLocal)}
                       aoTirarNovamente={() => formulario.tirarFotoSlot(slot.tipoFoto)}
                     />
@@ -180,8 +229,10 @@ export default function TelaNovaSolicitacao() {
                   ...formulario.fotos.map((foto, indice) => (
                     <LinhaFotoPronta
                       key={foto.uriLocal}
-                      uri={foto.uriLocal}
+                      foto={foto}
                       rotulo={`Foto ${indice + 1}`}
+                      nomeMotorista={formulario.motoristaNome}
+                      placa={formulario.veiculo?.placa}
                       aoAbrir={() => setFotoAberta(foto.uriLocal)}
                       aoTirarNovamente={() => formulario.substituirFotoMultipla(foto.uriLocal)}
                     />
@@ -213,7 +264,25 @@ export default function TelaNovaSolicitacao() {
 
       <Modal visible={fotoAberta !== null} transparent animationType="fade" onRequestClose={() => setFotoAberta(null)}>
         <Pressable style={styles.fundoModalFoto} onPress={() => setFotoAberta(null)}>
-          {fotoAberta && <Image source={{ uri: fotoAberta }} style={styles.fotoAmpliadaModal} resizeMode="contain" />}
+          {fotoAberta && (
+            <View style={styles.fotoAmpliadaContainer}>
+              <Image source={{ uri: fotoAberta }} style={styles.fotoAmpliadaModal} resizeMode="contain" />
+              {(() => {
+                const foto = formulario.fotos.find((f) => f.uriLocal === fotoAberta)
+                if (!foto) return null
+                return (
+                  <PreviaMarcaDagua
+                    capturadaEm={foto.capturadaEm}
+                    nomeMotorista={formulario.motoristaNome}
+                    placa={formulario.veiculo?.placa}
+                    latitude={foto.latitude}
+                    longitude={foto.longitude}
+                    localizacaoRotulo={foto.localizacaoRotulo}
+                  />
+                )
+              })()}
+            </View>
+          )}
         </Pressable>
       </Modal>
     </SafeAreaView>
@@ -221,20 +290,32 @@ export default function TelaNovaSolicitacao() {
 }
 
 function LinhaFotoPronta({
-  uri,
+  foto,
   rotulo,
+  nomeMotorista,
+  placa,
   aoAbrir,
   aoTirarNovamente,
 }: {
-  uri: string
+  foto: { uriLocal: string; capturadaEm?: string; latitude?: number; longitude?: number; localizacaoRotulo?: string }
   rotulo: string
+  nomeMotorista?: string | null
+  placa?: string | null
   aoAbrir: () => void
   aoTirarNovamente: () => void
 }) {
   return (
-    <View style={styles.linhaFotoPronta}>
-      <Pressable onPress={aoAbrir}>
-        <Image source={{ uri }} style={styles.miniatura} resizeMode="cover" />
+    <View style={styles.cartaoFotoPronta}>
+      <Pressable onPress={aoAbrir} style={styles.miniaturaContainer}>
+        <Image source={{ uri: foto.uriLocal }} style={styles.miniatura} resizeMode="cover" />
+        <PreviaMarcaDagua
+          capturadaEm={foto.capturadaEm}
+          nomeMotorista={nomeMotorista}
+          placa={placa}
+          latitude={foto.latitude}
+          longitude={foto.longitude}
+          localizacaoRotulo={foto.localizacaoRotulo}
+        />
       </Pressable>
       <View style={styles.linhaFotoInfo}>
         <Text style={styles.fotoOk}>✓ {rotulo}</Text>
@@ -282,6 +363,16 @@ const styles = StyleSheet.create({
   iconeFechar: { fontSize: 20, color: '#0f172a', fontWeight: '700' },
   tituloCabecalho: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   conteudo: { padding: 16, paddingBottom: 24 },
+  motoristaVinculado: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0f766e',
+    backgroundColor: '#f0fdfa',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+  },
   rotulo: { fontSize: 13, fontWeight: '700', color: '#334155', marginTop: 16, marginBottom: 6 },
   input: {
     borderWidth: 1,
@@ -294,6 +385,7 @@ const styles = StyleSheet.create({
     color: '#0f172a',
   },
   inputMultilinha: { height: 90, paddingTop: 12, textAlignVertical: 'top' },
+  valorCalculado: { marginTop: 10, fontSize: 15, fontWeight: '700', color: '#0f766e' },
   listaVeiculos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   vazio: { color: '#94a3b8', fontStyle: 'italic' },
   veiculoEscolhido: {
@@ -313,14 +405,20 @@ const styles = StyleSheet.create({
   chipSelecionado: { backgroundColor: '#0d9488', borderColor: '#0d9488' },
   chipTexto: { fontSize: 14, fontWeight: '600', color: '#334155' },
   chipTextoSelecionado: { color: '#fff' },
-  listaFotos: { gap: 10 },
-  linhaFotoPronta: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  miniatura: { width: 56, height: 56, borderRadius: 10, backgroundColor: '#e2e8f0' },
-  linhaFotoInfo: { flex: 1, gap: 4 },
+  listaFotos: { gap: 14 },
+  cartaoFotoPronta: { gap: 6 },
+  // relative (padrão do RN pra View) -- é o que ancora a faixa da prévia
+  // (position: absolute) exatamente sobre a miniatura, não a tela toda.
+  miniaturaContainer: { borderRadius: 10, overflow: 'hidden' },
+  // Bem maior que antes (era 56x56): pequena demais pra caber as linhas
+  // da prévia da marca d'água de um jeito legível (pedido do usuário).
+  miniatura: { width: '100%', aspectRatio: 4 / 3, backgroundColor: '#e2e8f0' },
+  linhaFotoInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   fotoOk: { color: '#0f766e', fontWeight: '700', fontSize: 15 },
   linkTirarNovo: { color: '#64748b', fontWeight: '600', fontSize: 14 },
   fundoModalFoto: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
-  fotoAmpliadaModal: { width: '100%', height: '85%' },
+  fotoAmpliadaContainer: { width: '100%', height: '85%' },
+  fotoAmpliadaModal: { width: '100%', height: '100%' },
   botaoFoto: { alignSelf: 'flex-start', backgroundColor: '#0d9488', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 },
   botaoFotoTexto: { color: '#fff', fontSize: 15, fontWeight: '700' },
   desabilitado: { opacity: 0.6 },

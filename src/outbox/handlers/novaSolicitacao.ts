@@ -34,6 +34,16 @@ export interface NovaSolicitacaoPayload {
   servico: string
   valor: number
   odometro: number | null
+  /** Motorista vinculado ao usuário que criou a solicitação
+   *  (frota_perfis.motorista_id) -- nulo se o usuário não tiver
+   *  motorista vinculado ainda. */
+  motoristaId?: number | null
+  /** Só preenchidos em ABASTECIMENTO -- servem pra gerar o lançamento de
+   *  verdade em frota_abastecimentos quando a solicitação for aprovada
+   *  (ver 0025_abastecimento_completo.sql). Nulos em MANUTENÇÃO/OUTRO. */
+  litros?: number | null
+  precoLitro?: number | null
+  tipoCombustivel?: string | null
   fotos: FotoPayload[]
   aprovacaoId?: number
 }
@@ -55,6 +65,10 @@ async function enviar(
         servico: payload.servico,
         valor: payload.valor,
         odometro: payload.odometro,
+        motorista_id: payload.motoristaId,
+        litros: payload.litros,
+        preco_litro: payload.precoLitro,
+        tipo_combustivel: payload.tipoCombustivel,
         origem_local_id: ctx.itemId,
       })
       .select('id')

@@ -34,6 +34,10 @@ export type StatusAprovacao = 'PENDENTE' | 'APROVADO' | 'REPROVADO'
 
 export type TipoAnexo = 'PROBLEMA' | 'ORCAMENTO' | 'NOTA FISCAL' | 'OUTRO' | 'BOMBA' | 'PLACA' | 'KM'
 
+/** Mesmo enum frota_tipo_combustivel do banco (0001_schema.sql). */
+export const TIPOS_COMBUSTIVEL = ['GASOLINA', 'ALCOOL', 'DIESEL', 'DIESEL S10', 'ARLA 32', 'GNV'] as const
+export type TipoCombustivel = (typeof TIPOS_COMBUSTIVEL)[number]
+
 export interface Aprovacao {
   id: number
   data: string
@@ -42,6 +46,9 @@ export interface Aprovacao {
   servico: string
   valor: number
   odometro: number | null
+  litros: number | null
+  preco_litro: number | null
+  tipo_combustivel: TipoCombustivel | null
   justificativa: string | null
   categoria: CategoriaSolicitacao | null
   status: StatusAprovacao
