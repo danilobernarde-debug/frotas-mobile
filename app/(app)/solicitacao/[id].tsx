@@ -121,7 +121,7 @@ export default function TelaDetalheSolicitacao() {
           <Text style={styles.servico}>{aprovacao.servico}</Text>
 
           <View style={styles.linha}>
-            <Text style={styles.rotulo}>Veículo</Text>
+            <Text style={styles.rotulo}>Placa</Text>
             <Text style={styles.valor}>{aprovacao.veiculo?.placa ?? '—'}</Text>
           </View>
           <View style={styles.linha}>
@@ -130,13 +130,31 @@ export default function TelaDetalheSolicitacao() {
           </View>
           {aprovacao.odometro != null && (
             <View style={styles.linha}>
-              <Text style={styles.rotulo}>KM</Text>
+              <Text style={styles.rotulo}>KM Atual</Text>
               <Text style={styles.valor}>{aprovacao.odometro.toLocaleString('pt-BR')}</Text>
+            </View>
+          )}
+          {aprovacao.tipo_combustivel != null && (
+            <View style={styles.linha}>
+              <Text style={styles.rotulo}>Combustível</Text>
+              <Text style={styles.valor}>{aprovacao.tipo_combustivel}</Text>
+            </View>
+          )}
+          {aprovacao.litros != null && (
+            <View style={styles.linha}>
+              <Text style={styles.rotulo}>Litros</Text>
+              <Text style={styles.valor}>{aprovacao.litros.toLocaleString('pt-BR')} L</Text>
+            </View>
+          )}
+          {aprovacao.preco_litro != null && (
+            <View style={styles.linha}>
+              <Text style={styles.rotulo}>Preço por litro</Text>
+              <Text style={styles.valor}>{moeda(aprovacao.preco_litro)}</Text>
             </View>
           )}
           {aprovacao.valor > 0 && (
             <View style={styles.linha}>
-              <Text style={styles.rotulo}>Valor</Text>
+              <Text style={styles.rotulo}>Total</Text>
               <Text style={styles.valor}>{moeda(aprovacao.valor)}</Text>
             </View>
           )}
