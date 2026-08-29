@@ -39,28 +39,40 @@ export function useCapturaComLocal() {
     }
   }, [])
 
-  /** Tira uma foto e já resolve a localização (aqui só espera o que já
-   *  estava em andamento, nunca inicia um pedido novo logo depois da
-   *  câmera fechar). Carimba no momento da captura, não do envio --
-   *  importa num app offline-first, onde a foto pode subir horas depois.
-   *  Null se o usuário cancelar a captura. */
-  async function capturar(): Promise<FotoComLocal | null> {
+  /**
+   * Tira a foto e devolve na hora -- NÃO espera a localização resolver.
+   * Antes, capturar() ficava parado até o GPS terminar (podia levar vários
+   * segundos, às vezes o tempo limite inteiro de obterLocalizacaoAtual())
+   * antes de sequer devolver a foto pra tela mostrar, deixando "tirar
+   * foto" bem mais lento que precisava (reportado pelo usuário, sentido
+   * na prática comparando com o fluxo de manutenção antes deste ajuste
+   * cobrir os dois igual).
+   *
+   * `aoLocalizar` (opcional) é chamado depois, só quando a localização
+   * realmente resolver -- quem chama usa isso pra completar os campos de
+   * local na MESMA foto já exibida na tela (por isso o retorno inclui o
+   * uri: é a chave pra saber qual foto atualizar, já que outras podem ter
+   * sido tiradas nesse meio tempo). Se a localização já tiver terminado
+   * antes da foto (comum, já que o pedido começa no mount do hook), o
+   * callback roda quase na hora mesmo assim -- não muda nada pra quem
+   * chama, sempre o mesmo caminho.
+   */
+  async function capturar(
+    aoLocalizar?: (uri: string, local: LocalCapturado | null) => void,
+  ): Promise<FotoComLocal | null> {
     setCapturando(true)
     const uri = await capturarFoto()
-    if (!uri) {
-      setCapturando(false)
-      return null
-    }
-    const capturadaEm = new Date().toISOString()
-    const local = await (localizacaoPromise.current ?? Promise.resolve(null))
     setCapturando(false)
-    return {
-      uriLocal: uri,
-      capturadaEm,
-      latitude: local?.latitude,
-      longitude: local?.longitude,
-      localizacaoRotulo: local?.rotulo ?? undefined,
+    if (!uri) return null
+
+    const capturadaEm = new Date().toISOString()
+
+    if (aoLocalizar) {
+      const promessa = localizacaoPromise.current ?? Promise.resolve(null)
+      promessa.then((local) => aoLocalizar(uri, local))
     }
+
+    return { uriLocal: uri, capturadaEm }
   }
 
   return { capturando, capturar }
