@@ -13,7 +13,18 @@ function inicial(nome: string | undefined) {
  * voltar opcional, já que agora as duas telas moram fora de um menu de
  * abas fixo.
  */
-export function CabecalhoApp({ mostrarVoltar, subtitulo }: { mostrarVoltar?: boolean; subtitulo?: string }) {
+export function CabecalhoApp({
+  mostrarVoltar,
+  subtitulo,
+  subtituloErro,
+}: {
+  mostrarVoltar?: boolean
+  subtitulo?: string
+  /** true deixa o subtítulo em vermelho -- usado quando ele é uma
+   *  mensagem de erro (ex.: falha ao enviar foto), não o status normal
+   *  de sincronização. */
+  subtituloErro?: boolean
+}) {
   const { perfil, sair } = useAuth()
   const router = useRouter()
   const [contaAberta, setContaAberta] = useState(false)
@@ -32,7 +43,11 @@ export function CabecalhoApp({ mostrarVoltar, subtitulo }: { mostrarVoltar?: boo
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.titulo}>{perfil?.nome ?? 'Frotas'}</Text>
-            {subtitulo && <Text style={styles.subtitulo}>{subtitulo}</Text>}
+            {subtitulo && (
+              <Text style={[styles.subtitulo, subtituloErro && styles.subtituloErro]} numberOfLines={2}>
+                {subtitulo}
+              </Text>
+            )}
           </View>
         </Pressable>
       </View>
@@ -71,6 +86,7 @@ const styles = StyleSheet.create({
   avatarTexto: { color: '#fff', fontSize: 16, fontWeight: '700' },
   titulo: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   subtitulo: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  subtituloErro: { color: '#be123c', fontWeight: '600' },
   fundoModal: { flex: 1, backgroundColor: 'rgba(15,23,42,0.4)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   cartaoConta: { width: '100%', maxWidth: 320, backgroundColor: '#fff', borderRadius: 18, padding: 24, alignItems: 'center' },
   avatarGrande: { width: 64, height: 64, borderRadius: 32, marginBottom: 12 },

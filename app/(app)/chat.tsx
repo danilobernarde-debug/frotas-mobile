@@ -38,7 +38,7 @@ export default function TelaChat() {
   const { perfil } = useAuth()
   const { entradas, carregando, recarregar } = useMinhasSolicitacoes()
   const entradasComDivisor = useDivisorNaoLidas(inserirDivisoresData(entradas))
-  const { pendentes, sincronizando } = useSyncStatus()
+  const { pendentes, sincronizando, ultimoErro } = useSyncStatus()
   const conectado = useNetworkStatus()
 
   const [respondendoA, setRespondendoA] = useState<RespondendoA | null>(null)
@@ -185,13 +185,21 @@ export default function TelaChat() {
     }
   }, [carregando, entradasComDivisor.length])
 
+  // ultimoErro vem do motor de sincronização (assinarEstadoSync) -- é a
+  // mensagem da última falha de envio (solicitação, foto, checklist ou
+  // mensagem), reiniciada a cada nova rodada de sync. Sem mostrar isto,
+  // uma foto que falhou ficava só como "1 pendente(s)" -- indistinguível
+  // de "ainda enviando", quando na prática pode estar preso.
+  const emErro = conectado && !sincronizando && Boolean(ultimoErro)
   const textoStatus = !conectado
     ? 'Sem conexão'
     : sincronizando
       ? 'Sincronizando…'
-      : pendentes > 0
-        ? `${pendentes} pendente(s)`
-        : 'Tudo sincronizado'
+      : emErro
+        ? `⚠️ ${ultimoErro}`
+        : pendentes > 0
+          ? `${pendentes} pendente(s)`
+          : 'Tudo sincronizado'
 
   function iniciarFormulario(categoria: CategoriaSolicitacao) {
     router.push({ pathname: '/(app)/nova-solicitacao', params: { categoria } })
@@ -199,7 +207,7 @@ export default function TelaChat() {
 
   return (
     <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
-      <CabecalhoApp mostrarVoltar subtitulo={textoStatus} />
+      <CabecalhoApp mostrarVoltar subtitulo={textoStatus} subtituloErro={emErro} />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}

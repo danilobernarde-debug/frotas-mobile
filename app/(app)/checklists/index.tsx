@@ -3,6 +3,8 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useMeusChecklists, type EntradaChecklist } from '../../../src/features/checklists/useMeusChecklists'
 import { data as fmtData } from '../../../src/lib/formato'
+import { useNetworkStatus } from '../../../src/net/useNetworkStatus'
+import { useSyncStatus } from '../../../src/outbox/useSyncStatus'
 import { CabecalhoApp } from '../../../src/ui/CabecalhoApp'
 
 function ItemChecklist({ entrada }: { entrada: EntradaChecklist }) {
@@ -35,10 +37,19 @@ function ItemChecklist({ entrada }: { entrada: EntradaChecklist }) {
 export default function TelaChecklists() {
   const router = useRouter()
   const { entradas, carregando, recarregar } = useMeusChecklists()
+  const { sincronizando, ultimoErro } = useSyncStatus()
+  const conectado = useNetworkStatus()
+
+  // Mesmo raciocínio de app/(app)/chat.tsx: sem isto, uma foto de
+  // checklist que falha ao subir só aparece como badge cinza "Aguardando
+  // envio" -- igual a uma que só está na fila esperando a vez, sem
+  // diferença visível nenhuma.
+  const emErro = conectado && !sincronizando && Boolean(ultimoErro)
+  const subtitulo = emErro ? `⚠️ ${ultimoErro}` : undefined
 
   return (
     <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
-      <CabecalhoApp mostrarVoltar />
+      <CabecalhoApp mostrarVoltar subtitulo={subtitulo} subtituloErro={emErro} />
 
       <View style={styles.barraAcao}>
         <Text style={styles.titulo}>Checklists</Text>
