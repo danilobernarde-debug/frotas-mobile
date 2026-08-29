@@ -39,13 +39,23 @@ export async function runSync(): Promise<void> {
   if (emAndamento) return
   if (Date.now() - ultimoFimMs < COOLDOWN_MS) return
 
-  const rede = await NetInfo.fetch()
-  if (!rede.isConnected) return
-
+  // Trava o mutex ANTES de qualquer await -- as duas checagens acima são
+  // síncronas, então travar aqui (não depois do NetInfo.fetch()) fecha a
+  // janela onde duas chamadas de runSync() quase simultâneas (ex.: o
+  // runSync() disparado logo após enfileirar() coincidindo com um evento
+  // de reconexão de rede) passavam as duas pela checagem antes de
+  // qualquer uma marcar emAndamento=true, e processavam o mesmo item da
+  // fila em paralelo -- causa confirmada de fotos/anexos enviados em
+  // dobro (2 uploads distintos no Drive pra cada foto, a poucos
+  // milissegundos um do outro).
   emAndamento = true
-  definirEstado({ sincronizando: true, ultimoErro: null })
 
   try {
+    const rede = await NetInfo.fetch()
+    if (!rede.isConnected) return
+
+    definirEstado({ sincronizando: true, ultimoErro: null })
+
     const itens = await listarPendentes()
 
     for (const item of itens) {
