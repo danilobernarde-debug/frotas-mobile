@@ -164,6 +164,17 @@ function PlayerAudio({
     player.play()
   }
 
+  // Sem controle de volume (nunca teve, este player já é feito na mão) --
+  // velocidade no lugar (pedido do usuário, mesmo botão já adicionado no
+  // player do painel web). Pressable próprio: precisa de onLongPress
+  // repassado igual aos outros elementos internos desta bolha (ver
+  // comentário grande no topo do arquivo) pra não perder o menu de
+  // Responder/Compartilhar ao segurar bem em cima do botão.
+  function alternarVelocidade() {
+    const proxima = VELOCIDADES_AUDIO[(VELOCIDADES_AUDIO.indexOf(status.playbackRate) + 1) % VELOCIDADES_AUDIO.length]
+    player.setPlaybackRate(proxima)
+  }
+
   return (
     <Pressable
       onPress={aoTocar}
@@ -185,9 +196,16 @@ function PlayerAudio({
       <Text style={[styles.audioTempo, minhaPropria && styles.audioTempoProprio]}>
         {duracaoAudio(status.playing || status.currentTime > 0 ? status.currentTime : status.duration)}
       </Text>
+      <Pressable onPress={alternarVelocidade} onLongPress={aoLongPress} hitSlop={6}>
+        <Text style={[styles.audioVelocidade, minhaPropria && styles.audioVelocidadeProprio]}>
+          {status.playbackRate}x
+        </Text>
+      </Pressable>
     </Pressable>
   )
 }
+
+const VELOCIDADES_AUDIO = [1, 1.25, 1.5, 2, 0.75]
 
 const styles = StyleSheet.create({
   imagem: { width: 220, height: 220, borderRadius: 10, marginBottom: 4 },
@@ -229,7 +247,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     marginBottom: 4,
-    minWidth: 190,
+    minWidth: 220,
   },
   audioOutro: { backgroundColor: 'rgba(15,23,42,0.06)' },
   audioProprio: { backgroundColor: 'rgba(255,255,255,0.15)' },
@@ -240,4 +258,15 @@ const styles = StyleSheet.create({
   audioBarraProgressoProprio: { backgroundColor: '#fff' },
   audioTempo: { fontSize: 11, color: '#475569', minWidth: 32 },
   audioTempoProprio: { color: 'rgba(255,255,255,0.85)' },
+  audioVelocidade: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.2)',
+    borderRadius: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  audioVelocidadeProprio: { color: '#fff', borderColor: 'rgba(255,255,255,0.4)' },
 })
