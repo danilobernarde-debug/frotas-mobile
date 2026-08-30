@@ -1,7 +1,9 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio'
 import { useVideoPlayer, VideoView } from 'expo-video'
-import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
+import { Image, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth/useAuth'
+import { FotoAmpliada } from '../../camera/FotoAmpliada'
 import { urlAnexoMensagem } from '../../lib/api'
 import { duracaoAudio, tamanhoArquivo } from '../../lib/formato'
 import type { Mensagem } from '../../lib/tipos'
@@ -15,6 +17,10 @@ import type { Mensagem } from '../../lib/tipos'
 export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; minhaPropria: boolean }) {
   const { sessao } = useAuth()
   const token = sessao?.access_token
+  // Só a imagem usa isto (abre em tela cheia ao tocar, estilo
+  // abastecimento/checklist) -- hook fica aqui em cima, antes de
+  // qualquer "return null", pra não violar a regra de hooks.
+  const [ampliada, setAmpliada] = useState(false)
 
   if (!mensagem.anexo_tipo) return null
 
@@ -37,28 +43,44 @@ export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; 
 
   if (!mensagem.anexo_caminho || !token) return null
   const url = urlAnexoMensagem(mensagem.id)
+  // ?token= na URL (não header) -- expo-audio/expo-video usam player
+  // nativo por baixo (AVPlayer/ExoPlayer), que não tem o mesmo suporte
+  // maduro a header customizado que Image/fetch já têm -- achado real:
+  // áudio/vídeo não tocavam (header ignorado, servidor devolvia 401 em
+  // silêncio). Mesmo truque que já era usado pra abrir documento
+  // (Linking não manda header nenhum de qualquer forma).
+  const urlComToken = `${url}?token=${encodeURIComponent(token)}`
 
   if (mensagem.anexo_tipo === 'IMAGEM') {
     return (
-      <Image
-        source={{ uri: url, headers: { Authorization: `Bearer ${token}` } }}
-        style={styles.imagem}
-        resizeMode="cover"
-      />
+      <>
+        <Pressable onPress={() => setAmpliada(true)}>
+          <Image
+            source={{ uri: url, headers: { Authorization: `Bearer ${token}` } }}
+            style={styles.imagem}
+            resizeMode="cover"
+          />
+        </Pressable>
+        <Modal visible={ampliada} animationType="fade" onRequestClose={() => setAmpliada(false)}>
+          <Pressable style={styles.fundoAmpliada} onPress={() => setAmpliada(false)}>
+            <FotoAmpliada uri={urlComToken} />
+          </Pressable>
+        </Modal>
+      </>
     )
   }
 
   if (mensagem.anexo_tipo === 'VIDEO') {
-    return <PlayerVideo url={url} token={token} />
+    return <PlayerVideo url={urlComToken} />
   }
 
   if (mensagem.anexo_tipo === 'AUDIO') {
-    return <PlayerAudio url={url} token={token} minhaPropria={minhaPropria} />
+    return <PlayerAudio url={urlComToken} minhaPropria={minhaPropria} />
   }
 
   return (
     <Pressable
-      onPress={() => Linking.openURL(`${url}?token=${encodeURIComponent(token)}`)}
+      onPress={() => Linking.openURL(urlComToken)}
       style={[styles.documento, minhaPropria ? styles.documentoProprio : styles.documentoOutro]}
     >
       <Text style={styles.documentoIcone}>📄</Text>
@@ -79,13 +101,13 @@ export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; 
   )
 }
 
-function PlayerVideo({ url, token }: { url: string; token: string }) {
-  const player = useVideoPlayer({ uri: url, headers: { Authorization: `Bearer ${token}` } })
+function PlayerVideo({ url }: { url: string }) {
+  const player = useVideoPlayer(url)
   return <VideoView player={player} style={styles.video} nativeControls contentFit="cover" />
 }
 
-function PlayerAudio({ url, token, minhaPropria }: { url: string; token: string; minhaPropria: boolean }) {
-  const player = useAudioPlayer({ uri: url, headers: { Authorization: `Bearer ${token}` } })
+function PlayerAudio({ url, minhaPropria }: { url: string; minhaPropria: boolean }) {
+  const player = useAudioPlayer(url)
   const status = useAudioPlayerStatus(player)
 
   function aoTocar() {
@@ -123,6 +145,7 @@ function PlayerAudio({ url, token, minhaPropria }: { url: string; token: string;
 
 const styles = StyleSheet.create({
   imagem: { width: 220, height: 220, borderRadius: 10, marginBottom: 4 },
+  fundoAmpliada: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)' },
   video: { width: 220, height: 220, borderRadius: 10, marginBottom: 4, backgroundColor: '#000' },
   documento: {
     flexDirection: 'row',

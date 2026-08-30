@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import { Image, StyleSheet, View, type ImageLoadEventData, type NativeSyntheticEvent } from 'react-native'
+import {
+  Image,
+  StyleSheet,
+  View,
+  type ImageLoadEventData,
+  type LayoutChangeEvent,
+  type NativeSyntheticEvent,
+} from 'react-native'
 import { PreviaMarcaDagua } from './PreviaMarcaDagua'
 
 interface FotoAmpliadaProps {
@@ -14,25 +21,50 @@ interface FotoAmpliadaProps {
 
 /**
  * Foto em tela cheia (revisão pós-captura, dentro do Modal de zoom) com a
- * faixa da marca d'água encostada nela de verdade. Antes a moldura era
- * sempre 100%x100% do espaço disponível e a <Image resizeMode="contain">
- * desenhava a foto real menor lá dentro (letterbox, preservando a
- * proporção) -- a faixa (PreviaMarcaDagua, absolute bottom/left/right)
- * ficava presa na moldura inteira, não na foto de verdade, vazando pros
- * dois lados quando a proporção não batia com a tela (achado real,
- * relatado pelo usuário). onLoad devolve a proporção de verdade da
- * imagem; a moldura passa a ter essa MESMA proporção (aspectRatio),
- * então a faixa fica exatamente do tamanho da foto.
+ * faixa da marca d'água encostada nela de verdade.
  *
- * Compartilhado entre nova-solicitacao.tsx e checklists/novo.tsx -- os
- * dois tinham essa composição repetida.
+ * Precisa do tamanho do CONTAINER (onLayout, em pixels de verdade) E da
+ * proporção da imagem (onLoad) pra calcular a moldura -- só `aspectRatio`
+ * sem largura/altura explícita não basta: sem nenhuma das duas, o Yoga
+ * (motor de layout do RN) pode simplesmente colapsar a moldura pra
+ * tamanho zero dentro de um pai centralizado (alignItems/justifyContent
+ * 'center', sem 'stretch' nenhum pra forçar um tamanho) -- foi
+ * exatamente isso que aconteceu numa 1ª tentativa só com aspectRatio:
+ * moldura sumia, sobrava só o fundo escuro do Modal por trás (achado
+ * real, relatado pelo usuário: "só abre uma sombra preta"). Com os dois
+ * valores em mãos, o cálculo abaixo é o mesmo de sempre pra encaixar uma
+ * proporção dentro de uma caixa ("contain"), só que em JS.
  */
 export function FotoAmpliada({ uri, ...marcaDagua }: FotoAmpliadaProps) {
+  const [caixa, setCaixa] = useState<{ largura: number; altura: number } | null>(null)
   const [aspecto, setAspecto] = useState<number | null>(null)
+  // Sem NENHUM dado de marca d'água (caso do chat, que só passa a uri --
+  // ali a faixa não faz sentido, mostraria tudo "—") -- só desenha a
+  // faixa quando quem chama de fato tem algo pra mostrar (abastecimento/
+  // checklist sempre têm ao menos nomeMotorista).
+  const temMarcaDagua = Object.values(marcaDagua).some((v) => v !== undefined)
+
+  let moldura: { width: number; height: number } | null = null
+  if (caixa && aspecto) {
+    const aspectoCaixa = caixa.largura / caixa.altura
+    moldura =
+      aspectoCaixa > aspecto
+        ? { height: caixa.altura, width: caixa.altura * aspecto }
+        : { width: caixa.largura, height: caixa.largura / aspecto }
+  }
 
   return (
-    <View style={styles.container}>
-      <View style={[styles.moldura, aspecto ? { aspectRatio: aspecto } : styles.molduraSemAspecto]}>
+    <View
+      style={styles.container}
+      onLayout={(evento: LayoutChangeEvent) => {
+        const { width, height } = evento.nativeEvent.layout
+        setCaixa({ largura: width, altura: height })
+      }}
+    >
+      {/* Enquanto a caixa/proporção ainda não resolveram (1ª pintura),
+          ocupa o espaço todo -- assim que os dois valores chegam, o
+          próximo render já usa o tamanho calculado certo. */}
+      <View style={moldura ?? styles.molduraProvisoria}>
         <Image
           source={{ uri }}
           style={StyleSheet.absoluteFill}
@@ -42,7 +74,7 @@ export function FotoAmpliada({ uri, ...marcaDagua }: FotoAmpliadaProps) {
             if (width && height) setAspecto(width / height)
           }}
         />
-        <PreviaMarcaDagua {...marcaDagua} />
+        {temMarcaDagua && <PreviaMarcaDagua {...marcaDagua} />}
       </View>
     </View>
   )
@@ -50,12 +82,5 @@ export function FotoAmpliada({ uri, ...marcaDagua }: FotoAmpliadaProps) {
 
 const styles = StyleSheet.create({
   container: { width: '100%', height: '85%', alignItems: 'center', justifyContent: 'center' },
-  // maxWidth/maxHeight (não width/height fixos): combinado com aspectRatio,
-  // é isso que faz a moldura encolher pra caber no espaço disponível sem
-  // esticar além da proporção real da foto -- mesmo efeito de "contain",
-  // só que aplicado à moldura (que a faixa acompanha), não só à imagem.
-  moldura: { maxWidth: '100%', maxHeight: '100%' },
-  // Antes do onLoad resolver a proporção -- ocupa o espaço todo por
-  // enquanto (mesmo comportamento de antes), corrige assim que souber.
-  molduraSemAspecto: { width: '100%', height: '100%' },
+  molduraProvisoria: { width: '100%', height: '100%' },
 })
