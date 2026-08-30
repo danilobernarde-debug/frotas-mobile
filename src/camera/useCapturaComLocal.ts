@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { obterLocalizacaoAtual, type LocalCapturado } from '../lib/localizacao'
 import { capturarFoto } from './capturarFoto'
+import type { ContextoMarcaDagua } from './CameraCustomizada'
 
 export interface FotoComLocal {
   uriLocal: string
@@ -59,9 +60,10 @@ export function useCapturaComLocal() {
    */
   async function capturar(
     aoLocalizar?: (uri: string, local: LocalCapturado | null) => void,
+    marcaDagua?: ContextoMarcaDagua,
   ): Promise<FotoComLocal | null> {
     setCapturando(true)
-    const uri = await capturarFoto()
+    const uri = await capturarFoto(marcaDagua)
     setCapturando(false)
     if (!uri) return null
 

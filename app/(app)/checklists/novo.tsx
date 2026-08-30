@@ -50,6 +50,10 @@ export default function TelaNovoChecklist() {
   // uri local da foto aberta em tela cheia, ou null se o modal tá fechado.
   const [fotoAberta, setFotoAberta] = useState<string | null>(null)
 
+  // Alimenta a marca d'água ao vivo no visor da câmera (mesmos dados que
+  // a prévia pós-captura já mostrava, ver PreviaMarcaDagua abaixo).
+  const marcaDagua = { nomeMotorista: perfil?.motoristaNome, placa: veiculo?.placa }
+
   async function tirarFotoItem(itemId: number) {
     setCapturandoItemId(itemId)
     const foto = await capturar((uri, local) => {
@@ -71,7 +75,7 @@ export default function TelaNovoChecklist() {
           },
         }
       })
-    })
+    }, marcaDagua)
     setCapturandoItemId(null)
     if (!foto) return
     setFotosPorItem((atual) => ({ ...atual, [itemId]: foto }))

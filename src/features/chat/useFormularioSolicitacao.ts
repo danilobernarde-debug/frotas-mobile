@@ -66,15 +66,20 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
 
   /** Uma das 3 fotos fixas do abastecimento -- tirar de novo substitui só
    *  a foto daquele tipo, as outras 2 continuam como estavam. */
+  // Motorista/placa já disponíveis aqui (mesmos dados que a prévia
+  // pós-captura sempre mostrou) -- passados pra câmera pra desenhar a
+  // faixa da marca d'água ao vivo, no visor, antes de tirar a foto.
+  const marcaDagua = { nomeMotorista: perfil?.motoristaNome, placa: veiculo?.placa }
+
   async function tirarFotoSlot(tipoFoto: string) {
-    const foto = await capturar(completarLocal)
+    const foto = await capturar(completarLocal, marcaDagua)
     if (!foto) return
     setFotos((atual) => [...atual.filter((f) => f.tipoFoto !== tipoFoto), { tipoFoto, ...foto }])
   }
 
   /** Lista aberta (manutenção) -- cada toque soma mais uma foto. */
   async function tirarFotoMultipla() {
-    const foto = await capturar(completarLocal)
+    const foto = await capturar(completarLocal, marcaDagua)
     if (!foto) return
     setFotos((atual) => [...atual, { tipoFoto: 'PROBLEMA', ...foto }])
   }
@@ -83,7 +88,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
    *  identifica qual pela uri local (não tem slot fixo pra identificar,
    *  diferente de tirarFotoSlot). */
   async function substituirFotoMultipla(uriLocalAntigo: string) {
-    const foto = await capturar(completarLocal)
+    const foto = await capturar(completarLocal, marcaDagua)
     if (!foto) return
     setFotos((atual) =>
       atual.map((f) => (f.uriLocal === uriLocalAntigo ? { tipoFoto: 'PROBLEMA', ...foto } : f)),

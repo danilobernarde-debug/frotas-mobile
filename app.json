@@ -46,6 +46,13 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Usado para fotografar o problema, a bomba, a placa ou o KM na solicitação.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Usado para registrar onde a foto do abastecimento foi tirada."
