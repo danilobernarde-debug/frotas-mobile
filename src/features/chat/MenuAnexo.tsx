@@ -63,17 +63,17 @@ export function MenuAnexo({
     setTimeout(dispararPendente, 400)
   }
 
-  /** Câmera/galeria/documento abrem outra apresentação nativa (câmera
-   *  própria do app ou o seletor do sistema) -- fechar ESTE modal antes
-   *  de abrir o novo é exatamente a race condition acima (mesmo com o
-   *  truque de fecharEDepois, ainda falhava de vez em quando no iOS: o
-   *  seletor abria e fechava sozinho na hora, sem erro nenhum -- achado
-   *  real, reportado pelo usuário como "não abre nada"). Em vez de fechar
-   *  e esperar, mantém ESTE modal aberto (visualmente coberto pelo
+  /** Galeria/documento abrem um seletor NATIVO do sistema (UIImagePickerController/
+   *  UIDocumentPickerViewController no iOS, não um <Modal> do React Native)
+   *  -- fechar ESTE modal antes de abrir o seletor é a race condition do
+   *  comentário acima (mesmo com fecharEDepois, ainda falhava de vez em
+   *  quando no iOS: o seletor abria e fechava sozinho na hora, sem erro
+   *  nenhum -- achado real, reportado como "não abre nada"). Em vez de
+   *  fechar e esperar, mantém ESTE modal aberto (visualmente coberto pelo
    *  seletor, que fica por cima) e só fecha depois que o seletor já
    *  resolveu -- apresentação aninhada é o caso comum e bem suportado no
-   *  iOS, diferente de fechar-então-abrir. */
-  async function aoEscolherEEsperar(fonte: 'camera' | 'galeria' | 'documento') {
+   *  iOS quando é um seletor NATIVO por cima. */
+  async function aoEscolherEEsperar(fonte: 'galeria' | 'documento') {
     await onEscolherAnexo(fonte)
     setAberto(false)
   }
@@ -119,7 +119,18 @@ export function MenuAnexo({
             {OPCOES_ANEXO.map((opcao) => (
               <Pressable
                 key={opcao.fonte}
-                onPress={() => aoEscolherEEsperar(opcao.fonte)}
+                onPress={() =>
+                  // Câmera abre OUTRO <Modal> do RN (CameraCustomizada) --
+                  // dois <Modal> nativos abertos ao mesmo tempo no iOS é o
+                  // caso que trava o app (mesma causa raiz já vista antes
+                  // com a câmera do abastecimento, ver presentation:'card'
+                  // em nova-solicitacao). Precisa fechar ESTE primeiro,
+                  // diferente de galeria/documento (seletor nativo, não
+                  // <Modal>, pode abrir por cima sem travar).
+                  opcao.fonte === 'camera'
+                    ? fecharEDepois(() => onEscolherAnexo('camera'))
+                    : aoEscolherEEsperar(opcao.fonte)
+                }
                 style={({ pressed }) => [styles.opcao, pressed && styles.opcaoPressionada]}
               >
                 <Text style={styles.opcaoIcone}>{opcao.icone}</Text>
