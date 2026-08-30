@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { FotoAmpliada } from '../../src/camera/FotoAmpliada'
 import { PreviaMarcaDagua } from '../../src/camera/PreviaMarcaDagua'
 import { SLOTS_ABASTECIMENTO } from '../../src/features/chat/fluxo'
 import { useFormularioSolicitacao } from '../../src/features/chat/useFormularioSolicitacao'
@@ -264,25 +265,21 @@ export default function TelaNovaSolicitacao() {
 
       <Modal visible={fotoAberta !== null} transparent animationType="fade" onRequestClose={() => setFotoAberta(null)}>
         <Pressable style={styles.fundoModalFoto} onPress={() => setFotoAberta(null)}>
-          {fotoAberta && (
-            <View style={styles.fotoAmpliadaContainer}>
-              <Image source={{ uri: fotoAberta }} style={styles.fotoAmpliadaModal} resizeMode="contain" />
-              {(() => {
-                const foto = formulario.fotos.find((f) => f.uriLocal === fotoAberta)
-                if (!foto) return null
-                return (
-                  <PreviaMarcaDagua
-                    capturadaEm={foto.capturadaEm}
-                    nomeMotorista={formulario.motoristaNome}
-                    placa={formulario.veiculo?.placa}
-                    latitude={foto.latitude}
-                    longitude={foto.longitude}
-                    localizacaoRotulo={foto.localizacaoRotulo}
-                  />
-                )
-              })()}
-            </View>
-          )}
+          {fotoAberta &&
+            (() => {
+              const foto = formulario.fotos.find((f) => f.uriLocal === fotoAberta)
+              return (
+                <FotoAmpliada
+                  uri={fotoAberta}
+                  capturadaEm={foto?.capturadaEm}
+                  nomeMotorista={formulario.motoristaNome}
+                  placa={formulario.veiculo?.placa}
+                  latitude={foto?.latitude}
+                  longitude={foto?.longitude}
+                  localizacaoRotulo={foto?.localizacaoRotulo}
+                />
+              )
+            })()}
         </Pressable>
       </Modal>
     </SafeAreaView>
@@ -417,8 +414,6 @@ const styles = StyleSheet.create({
   fotoOk: { color: '#0f766e', fontWeight: '700', fontSize: 15 },
   linkTirarNovo: { color: '#64748b', fontWeight: '600', fontSize: 14 },
   fundoModalFoto: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
-  fotoAmpliadaContainer: { width: '100%', height: '85%' },
-  fotoAmpliadaModal: { width: '100%', height: '100%' },
   botaoFoto: { alignSelf: 'flex-start', backgroundColor: '#0d9488', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 },
   botaoFotoTexto: { color: '#fff', fontSize: 15, fontWeight: '700' },
   desabilitado: { opacity: 0.6 },

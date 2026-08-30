@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../../../src/auth/useAuth'
 import { useCapturaComLocal, type FotoComLocal } from '../../../src/camera/useCapturaComLocal'
-import { PreviaMarcaDagua } from '../../../src/camera/PreviaMarcaDagua'
+import { FotoAmpliada } from '../../../src/camera/FotoAmpliada'
 import { useItensChecklist } from '../../../src/features/checklists/useItensChecklist'
 import { useVeiculos } from '../../../src/features/veiculos/useVeiculos'
 import type { Veiculo } from '../../../src/lib/tipos'
@@ -287,25 +287,21 @@ export default function TelaNovoChecklist() {
 
       <Modal visible={fotoAberta !== null} transparent animationType="fade" onRequestClose={() => setFotoAberta(null)}>
         <Pressable style={styles.fundoModalFoto} onPress={() => setFotoAberta(null)}>
-          {fotoAberta && (
-            <View style={styles.fotoAmpliadaContainer}>
-              <Image source={{ uri: fotoAberta }} style={styles.fotoAmpliadaModal} resizeMode="contain" />
-              {(() => {
-                const foto = Object.values(fotosPorItem).find((f) => f.uriLocal === fotoAberta)
-                if (!foto) return null
-                return (
-                  <PreviaMarcaDagua
-                    capturadaEm={foto.capturadaEm}
-                    nomeMotorista={perfil?.motoristaNome}
-                    placa={veiculo?.placa}
-                    latitude={foto.latitude}
-                    longitude={foto.longitude}
-                    localizacaoRotulo={foto.localizacaoRotulo}
-                  />
-                )
-              })()}
-            </View>
-          )}
+          {fotoAberta &&
+            (() => {
+              const foto = Object.values(fotosPorItem).find((f) => f.uriLocal === fotoAberta)
+              return (
+                <FotoAmpliada
+                  uri={fotoAberta}
+                  capturadaEm={foto?.capturadaEm}
+                  nomeMotorista={perfil?.motoristaNome}
+                  placa={veiculo?.placa}
+                  latitude={foto?.latitude}
+                  longitude={foto?.longitude}
+                  localizacaoRotulo={foto?.localizacaoRotulo}
+                />
+              )
+            })()}
         </Pressable>
       </Modal>
 
@@ -427,8 +423,6 @@ const styles = StyleSheet.create({
   },
   removerFotoItemTexto: { color: '#fff', fontSize: 11, fontWeight: '700' },
   fundoModalFoto: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
-  fotoAmpliadaContainer: { width: '100%', height: '85%' },
-  fotoAmpliadaModal: { width: '100%', height: '100%' },
   rodape: { padding: 16, borderTopWidth: 1, borderTopColor: '#e2e8f0', backgroundColor: '#fff' },
   botaoEnviar: { backgroundColor: '#0d9488', borderRadius: 10, height: 48, alignItems: 'center', justifyContent: 'center' },
   botaoDesabilitado: { opacity: 0.4 },
