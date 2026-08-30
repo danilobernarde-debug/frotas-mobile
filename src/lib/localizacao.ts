@@ -1,4 +1,5 @@
 import * as Location from 'expo-location'
+import { comTempoLimite } from './tempoLimite'
 
 export interface LocalCapturado { latitude: number; longitude: number; rotulo: string | null }
 
@@ -13,16 +14,6 @@ const TEMPO_MAXIMO_GEOCODIFICACAO_MS = 4000
 // Teto pra função inteira, não só pras chamadas de GPS/geocodificação --
 // ver o comentário em obterLocalizacaoAtual.
 const TEMPO_MAXIMO_TOTAL_MS = 7000
-
-function comTempoLimite<T>(promessa: Promise<T>, ms: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const temporizador = setTimeout(() => reject(new Error('Tempo esgotado.')), ms)
-    promessa.then(
-      (valor) => { clearTimeout(temporizador); resolve(valor) },
-      (erro) => { clearTimeout(temporizador); reject(erro) },
-    )
-  })
-}
 
 async function obterLocalizacaoInterno(): Promise<LocalCapturado | null> {
   const permissaoAtual = await Location.getForegroundPermissionsAsync()

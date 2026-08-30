@@ -38,6 +38,17 @@ export function MenuAnexo({
 }) {
   const [aberto, setAberto] = useState(false)
 
+  /** Fecha o modal e só chama a ação depois -- no iOS, abrir a câmera do
+   *  sistema (ImagePicker.launchCameraAsync) enquanto ESTE modal ainda
+   *  está no meio da animação de fechar pode falhar em silêncio (a nova
+   *  apresentação nativa se perde) -- achado real: usuário relatou "toco
+   *  em Câmera e não abre nada", sem erro nenhum no log. O atraso dá
+   *  tempo da transição terminar antes de pedir a próxima UI nativa. */
+  function fecharEDepois(acao: () => void) {
+    setAberto(false)
+    setTimeout(acao, 300)
+  }
+
   return (
     <>
       <Pressable
@@ -56,10 +67,7 @@ export function MenuAnexo({
               <Pressable
                 key={opcao.categoria}
                 disabled={desabilitado}
-                onPress={() => {
-                  setAberto(false)
-                  onEscolher(opcao.categoria)
-                }}
+                onPress={() => fecharEDepois(() => onEscolher(opcao.categoria))}
                 style={({ pressed }) => [
                   styles.opcao,
                   desabilitado && styles.opcaoDesabilitada,
@@ -76,10 +84,7 @@ export function MenuAnexo({
             {OPCOES_ANEXO.map((opcao) => (
               <Pressable
                 key={opcao.fonte}
-                onPress={() => {
-                  setAberto(false)
-                  onEscolherAnexo(opcao.fonte)
-                }}
+                onPress={() => fecharEDepois(() => onEscolherAnexo(opcao.fonte))}
                 style={({ pressed }) => [styles.opcao, pressed && styles.opcaoPressionada]}
               >
                 <Text style={styles.opcaoIcone}>{opcao.icone}</Text>
@@ -87,10 +92,7 @@ export function MenuAnexo({
               </Pressable>
             ))}
             <Pressable
-              onPress={() => {
-                setAberto(false)
-                onEscolherLocalizacao()
-              }}
+              onPress={() => fecharEDepois(onEscolherLocalizacao)}
               style={({ pressed }) => [styles.opcao, pressed && styles.opcaoPressionada]}
             >
               <Text style={styles.opcaoIcone}>📍</Text>

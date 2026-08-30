@@ -71,8 +71,20 @@ export function BarraEntrada({
       })
       return
     }
-    const midia = await escolherImagemChat(fonte)
-    if (!midia) return
+    const resultado = await escolherImagemChat(fonte)
+    if (!resultado.ok) {
+      if (resultado.motivo === 'permissao') {
+        setErro(
+          fonte === 'camera'
+            ? 'Sem permissão de câmera -- ative em Ajustes/Configurações do aparelho.'
+            : 'Sem permissão de fotos -- ative em Ajustes/Configurações do aparelho.',
+        )
+      } else if (resultado.motivo === 'travado') {
+        setErro('Não consegui pedir a permissão -- feche e abra o app de novo e tente outra vez.')
+      }
+      return
+    }
+    const midia = resultado.midia
     setAnexo({
       tipo: 'arquivo',
       uriLocal: midia.uri,
