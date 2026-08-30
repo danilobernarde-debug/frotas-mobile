@@ -55,6 +55,7 @@ export interface Aprovacao {
   solicitante_id: string | null
   origem_local_id: string | null
   criado_em: string
+  atualizado_em: string
   veiculo?: Pick<Veiculo, 'id' | 'placa' | 'modelo'> | null
 }
 

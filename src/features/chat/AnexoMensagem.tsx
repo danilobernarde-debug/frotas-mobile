@@ -1,6 +1,6 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio'
 import { useVideoPlayer, VideoView } from 'expo-video'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Image,
   Linking,
@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../../auth/useAuth'
 import { FotoAmpliada } from '../../camera/FotoAmpliada'
 import { urlAnexoMensagem } from '../../lib/api'
+import { obterAudioCacheado } from '../../lib/cacheAudioChat'
 import { duracaoAudio, tamanhoArquivo } from '../../lib/formato'
 import type { Mensagem } from '../../lib/tipos'
 
@@ -111,7 +112,14 @@ export function AnexoMensagem({
   }
 
   if (mensagem.anexo_tipo === 'AUDIO') {
-    return <PlayerAudio url={urlComToken} minhaPropria={minhaPropria} aoLongPress={aoLongPress} />
+    return (
+      <PlayerAudio
+        mensagemId={mensagem.id}
+        url={urlComToken}
+        minhaPropria={minhaPropria}
+        aoLongPress={aoLongPress}
+      />
+    )
   }
 
   return (
@@ -144,15 +152,34 @@ function PlayerVideo({ url }: { url: string }) {
 }
 
 function PlayerAudio({
+  mensagemId,
   url,
   minhaPropria,
   aoLongPress,
 }: {
+  mensagemId: number
   url: string
   minhaPropria: boolean
   aoLongPress?: (evento: GestureResponderEvent) => void
 }) {
-  const player = useAudioPlayer(url)
+  // Baixa uma vez e cacheia localmente (pedido do usuário: "salvar os
+  // áudios... pra abrir mais rápido") -- fonte fica null até resolver
+  // (cache já tinha, ou acabou de baixar), useAudioPlayer aceita source
+  // undefined nesse meio-tempo (não carrega nada ainda, sem erro). Da
+  // segunda vez que essa mensagem aparece na tela em diante nem precisa de
+  // rede -- o arquivo já está no aparelho.
+  const [fonte, setFonte] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelado = false
+    obterAudioCacheado(mensagemId, url).then((uri) => {
+      if (!cancelado) setFonte(uri)
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [mensagemId, url])
+
+  const player = useAudioPlayer(fonte ?? undefined)
   const status = useAudioPlayerStatus(player)
 
   function aoTocar() {

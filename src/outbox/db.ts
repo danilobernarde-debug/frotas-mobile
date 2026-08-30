@@ -27,6 +27,27 @@ export function obterBanco(): Promise<SQLite.SQLiteDatabase> {
           criado_em     text not null,
           atualizado_em text not null
         );
+
+        -- Cache local do chat (solicitações + mensagens já confirmadas pelo
+        -- servidor) -- guarda a linha inteira como JSON (mais simples que
+        -- espelhar cada coluna, e sobrevive a campos novos sem migration).
+        -- Existe pra abrir a conversa na hora (lê daqui primeiro, sem
+        -- esperar rede) e pra sincronizar só o que mudou depois, em vez de
+        -- buscar o histórico inteiro toda vez -- ver useMinhasSolicitacoes.
+        create table if not exists cache_aprovacoes (
+          id            integer primary key,
+          criado_em     text not null,
+          atualizado_em text not null,
+          dado_json     text not null
+        );
+        create index if not exists idx_cache_aprovacoes_atualizado_em on cache_aprovacoes(atualizado_em);
+
+        create table if not exists cache_mensagens (
+          id        integer primary key,
+          criado_em text not null,
+          dado_json text not null
+        );
+        create index if not exists idx_cache_mensagens_criado_em on cache_mensagens(criado_em);
       `)
 
       // Um item só fica 'enviando' enquanto um runSync() está de fato no
