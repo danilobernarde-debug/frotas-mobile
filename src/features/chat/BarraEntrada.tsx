@@ -28,7 +28,12 @@ import type { RespondendoA } from './types'
 
 type AnexoEscolhido =
   | { tipo: 'arquivo'; uriLocal: string; nomeArquivo: string; mime: string; categoria: CategoriaAnexoUpload; duracaoSegundos?: number }
-  | { tipo: 'localizacao'; latitude: number; longitude: number }
+  | { tipo: 'localizacao'; latitude: number; longitude: number; precisao?: number | null }
+
+/** "-23.550519, -46.633308" -- mesmo formato usado no painel web. */
+function formatarCoordenada(lat: number, lng: number) {
+  return `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+}
 
 /**
  * Rodapé estilo WhatsApp: "+" (MenuAnexo) reúne solicitação (abastecimento/
@@ -117,7 +122,7 @@ export function BarraEntrada({
       setErro('Não consegui obter sua localização -- confira o GPS/permissão do aparelho.')
       return
     }
-    setAnexo({ tipo: 'localizacao', latitude: local.latitude, longitude: local.longitude })
+    setAnexo({ tipo: 'localizacao', latitude: local.latitude, longitude: local.longitude, precisao: local.precisao })
   }
 
   async function iniciarGravacao() {
@@ -167,7 +172,9 @@ export function BarraEntrada({
           }
         : undefined
     const localizacaoPayload: LocalizacaoMensagemPayload | undefined =
-      anexo?.tipo === 'localizacao' ? { latitude: anexo.latitude, longitude: anexo.longitude } : undefined
+      anexo?.tipo === 'localizacao'
+        ? { latitude: anexo.latitude, longitude: anexo.longitude, precisao: anexo.precisao ?? undefined }
+        : undefined
 
     await enfileirar<MensagemPayload>(TIPO_MENSAGEM, {
       texto: digitado || undefined,
@@ -210,9 +217,13 @@ export function BarraEntrada({
       {anexo && (
         <View style={styles.previaBarra}>
           {anexo.tipo === 'localizacao' ? (
-            <Text style={styles.previaTexto} numberOfLines={1}>
-              📍 Localização atual selecionada
-            </Text>
+            <View style={styles.previaLocalizacao}>
+              <Text style={styles.previaLocalizacaoTitulo}>📍 Localização atual</Text>
+              <Text style={styles.previaLocalizacaoCoord}>
+                {formatarCoordenada(anexo.latitude, anexo.longitude)}
+                {anexo.precisao != null && ` · precisão ~${Math.round(anexo.precisao)} m`}
+              </Text>
+            </View>
           ) : anexo.categoria === 'IMAGEM' ? (
             <Image source={{ uri: anexo.uriLocal }} style={styles.previaImagem} />
           ) : anexo.categoria === 'VIDEO' ? (
@@ -331,6 +342,9 @@ const styles = StyleSheet.create({
   },
   previaImagem: { width: 40, height: 40, borderRadius: 6 },
   previaTexto: { flex: 1, fontSize: 13, color: '#334155' },
+  previaLocalizacao: { flex: 1 },
+  previaLocalizacaoTitulo: { fontSize: 13, fontWeight: '700', color: '#334155' },
+  previaLocalizacaoCoord: { fontSize: 11, color: '#64748b', marginTop: 1, fontVariant: ['tabular-nums'] },
   previaFechar: { fontSize: 16, color: '#94a3b8', paddingHorizontal: 6 },
   previaAudio: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   previaAudioBotao: { fontSize: 16, color: '#0f766e', width: 18, textAlign: 'center' },

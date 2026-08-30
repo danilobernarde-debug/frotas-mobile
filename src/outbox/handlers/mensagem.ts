@@ -21,6 +21,7 @@ export interface AnexoMensagemPayload {
 export interface LocalizacaoMensagemPayload {
   latitude: number
   longitude: number
+  precisao?: number
 }
 
 export interface MensagemPayload {
@@ -99,6 +100,7 @@ async function enviar(
           anexo_tipo: 'LOCALIZACAO',
           anexo_latitude: payload.localizacao.latitude,
           anexo_longitude: payload.localizacao.longitude,
+          anexo_precisao: payload.localizacao.precisao ?? null,
         }
       : {}),
   })

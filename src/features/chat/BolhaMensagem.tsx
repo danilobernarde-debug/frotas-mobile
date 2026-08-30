@@ -111,7 +111,12 @@ export function BolhaMensagem({
                 : `📄 ${anexoLocal.nomeArquivo}`}
           </Text>
         )}
-        {localizacaoLocal && <Text style={styles.textoProprio}>📍 Localização</Text>}
+        {localizacaoLocal && (
+          <Text style={styles.textoProprio}>
+            📍 {localizacaoLocal.latitude.toFixed(6)}, {localizacaoLocal.longitude.toFixed(6)}
+            {localizacaoLocal.precisao != null && ` · precisão ~${Math.round(localizacaoLocal.precisao)} m`}
+          </Text>
+        )}
         {item.payload.texto && <Text style={styles.textoProprio}>{item.payload.texto}</Text>}
         {item.permanente && item.erroMsg && <Text style={styles.erroMsg}>{item.erroMsg}</Text>}
         <Text style={styles.status}>

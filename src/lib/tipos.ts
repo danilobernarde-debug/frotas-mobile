@@ -119,4 +119,5 @@ export interface Mensagem {
   anexo_duracao_segundos: number | null
   anexo_latitude: number | null
   anexo_longitude: number | null
+  anexo_precisao: number | null
 }

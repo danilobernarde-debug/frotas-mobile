@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import * as Location from 'expo-location'
 import { comTempoLimite } from './tempoLimite'
 
-export interface LocalCapturado { latitude: number; longitude: number; rotulo: string | null }
+export interface LocalCapturado {
+  latitude: number
+  longitude: number
+  rotulo: string | null
+  /** Precisão horizontal do GPS em metros (coords.accuracy) -- null se o
+   *  aparelho não informou. */
+  precisao: number | null
+}
 
 // Curtos de propósito: indoor, emulador, ou GPS fraco simplesmente nunca
 // conseguem um fix -- não adianta esperar muito por um dado que não vai
@@ -28,7 +35,7 @@ async function obterLocalizacaoInterno(): Promise<LocalCapturado | null> {
     Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
     TEMPO_MAXIMO_POSICAO_MS,
   )
-  const { latitude, longitude } = posicao.coords
+  const { latitude, longitude, accuracy } = posicao.coords
 
   let rotulo: string | null = null
   try {
@@ -45,7 +52,7 @@ async function obterLocalizacaoInterno(): Promise<LocalCapturado | null> {
     // sem rede pro serviço de geocodificação -- sobe só coordenada crua
   }
 
-  return { latitude, longitude, rotulo }
+  return { latitude, longitude, rotulo, precisao: accuracy ?? null }
 }
 
 /**

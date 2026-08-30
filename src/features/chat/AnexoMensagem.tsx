@@ -34,9 +34,15 @@ export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; 
         style={[styles.documento, minhaPropria ? styles.documentoProprio : styles.documentoOutro]}
       >
         <Text style={styles.documentoIcone}>📍</Text>
-        <Text style={[styles.documentoNome, minhaPropria && styles.documentoNomeProprio]}>
-          Ver localização no mapa
-        </Text>
+        <View>
+          <Text style={[styles.documentoNome, minhaPropria && styles.documentoNomeProprio]}>
+            Ver localização no mapa
+          </Text>
+          <Text style={[styles.documentoTamanho, minhaPropria && styles.documentoTamanhoProprio]}>
+            {mensagem.anexo_latitude.toFixed(6)}, {mensagem.anexo_longitude.toFixed(6)}
+            {mensagem.anexo_precisao != null && ` · precisão ~${Math.round(mensagem.anexo_precisao)} m`}
+          </Text>
+        </View>
       </Pressable>
     )
   }
