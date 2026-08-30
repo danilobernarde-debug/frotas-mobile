@@ -29,7 +29,7 @@ export function MenuAnexo({
   desabilitado = false,
 }: {
   onEscolher: (categoria: CategoriaSolicitacao) => void
-  onEscolherAnexo: (fonte: 'camera' | 'galeria' | 'documento') => void
+  onEscolherAnexo: (fonte: 'camera' | 'galeria' | 'documento') => Promise<void>
   onEscolherLocalizacao: () => void
   /** true enquanto uma solicitação já está em andamento -- evita iniciar
    *  uma segunda por cima da primeira. Não desabilita os anexos: nada
@@ -61,6 +61,21 @@ export function MenuAnexo({
     acaoPendente.current = acao
     setAberto(false)
     setTimeout(dispararPendente, 400)
+  }
+
+  /** Câmera/galeria/documento abrem outra apresentação nativa (câmera
+   *  própria do app ou o seletor do sistema) -- fechar ESTE modal antes
+   *  de abrir o novo é exatamente a race condition acima (mesmo com o
+   *  truque de fecharEDepois, ainda falhava de vez em quando no iOS: o
+   *  seletor abria e fechava sozinho na hora, sem erro nenhum -- achado
+   *  real, reportado pelo usuário como "não abre nada"). Em vez de fechar
+   *  e esperar, mantém ESTE modal aberto (visualmente coberto pelo
+   *  seletor, que fica por cima) e só fecha depois que o seletor já
+   *  resolveu -- apresentação aninhada é o caso comum e bem suportado no
+   *  iOS, diferente de fechar-então-abrir. */
+  async function aoEscolherEEsperar(fonte: 'camera' | 'galeria' | 'documento') {
+    await onEscolherAnexo(fonte)
+    setAberto(false)
   }
 
   return (
@@ -104,7 +119,7 @@ export function MenuAnexo({
             {OPCOES_ANEXO.map((opcao) => (
               <Pressable
                 key={opcao.fonte}
-                onPress={() => fecharEDepois(() => onEscolherAnexo(opcao.fonte))}
+                onPress={() => aoEscolherEEsperar(opcao.fonte)}
                 style={({ pressed }) => [styles.opcao, pressed && styles.opcaoPressionada]}
               >
                 <Text style={styles.opcaoIcone}>{opcao.icone}</Text>
