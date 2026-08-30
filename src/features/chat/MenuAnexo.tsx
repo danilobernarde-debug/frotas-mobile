@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useRef, useState } from 'react'
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import type { CategoriaSolicitacao } from '../../lib/tipos'
 
 /** Lista extensível de propósito -- uma 3ª opção no futuro é só somar um
@@ -37,16 +37,27 @@ export function MenuAnexo({
   desabilitado?: boolean
 }) {
   const [aberto, setAberto] = useState(false)
+  const acaoPendente = useRef<(() => void) | null>(null)
 
-  /** Fecha o modal e só chama a ação depois -- no iOS, abrir a câmera do
-   *  sistema (ImagePicker.launchCameraAsync) enquanto ESTE modal ainda
-   *  está no meio da animação de fechar pode falhar em silêncio (a nova
-   *  apresentação nativa se perde) -- achado real: usuário relatou "toco
-   *  em Câmera e não abre nada", sem erro nenhum no log. O atraso dá
-   *  tempo da transição terminar antes de pedir a próxima UI nativa. */
+  function dispararPendente() {
+    const acao = acaoPendente.current
+    acaoPendente.current = null
+    acao?.()
+  }
+
+  /** Fecha o modal e só chama a ação DEPOIS que ele terminar de fechar de
+   *  verdade -- abrir outra UI nativa (câmera, seletor de foto/vídeo,
+   *  seletor de documento) enquanto ESTE modal ainda está no meio da
+   *  animação de fechar pode falhar em silêncio no iOS (a nova
+   *  apresentação se perde) -- achado real: usuário relatou os itens do
+   *  menu não abrindo nada. Uma 1ª tentativa com setTimeout(300ms) não
+   *  foi confiável o bastante -- onDismiss do Modal (iOS) só dispara
+   *  quando a transição REALMENTE terminou, sem depender de adivinhar um
+   *  tempo fixo. Android não tem onDismiss confiável, mantém o atraso ali. */
   function fecharEDepois(acao: () => void) {
+    acaoPendente.current = acao
     setAberto(false)
-    setTimeout(acao, 300)
+    if (Platform.OS !== 'ios') setTimeout(dispararPendente, 300)
   }
 
   return (
@@ -59,7 +70,13 @@ export function MenuAnexo({
         <Text style={styles.botaoTexto}>+</Text>
       </Pressable>
 
-      <Modal visible={aberto} transparent animationType="fade" onRequestClose={() => setAberto(false)}>
+      <Modal
+        visible={aberto}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAberto(false)}
+        onDismiss={dispararPendente}
+      >
         <Pressable style={styles.fundo} onPress={() => setAberto(false)}>
           <View style={styles.folha}>
             <Text style={styles.titulo}>O que você quer solicitar?</Text>
