@@ -1,7 +1,6 @@
 import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { PreviaMarcaDagua } from './PreviaMarcaDagua'
 
 export interface ContextoMarcaDagua {
@@ -135,7 +134,7 @@ export function CameraCustomizadaHost() {
           </View>
         )}
 
-        <SafeAreaView style={styles.topo} edges={['top']}>
+        <View style={styles.topo}>
           <Pressable onPress={() => fechar(null)} style={styles.botaoTopo} hitSlop={10}>
             <Text style={styles.botaoTopoTexto}>✕ Fechar</Text>
           </Pressable>
@@ -146,13 +145,13 @@ export function CameraCustomizadaHost() {
           >
             <Text style={styles.botaoTopoTexto}>{flash === 'off' ? '⚡️ Flash desligado' : '⚡️ Flash ligado'}</Text>
           </Pressable>
-        </SafeAreaView>
+        </View>
 
-        <SafeAreaView style={styles.rodape} edges={['bottom']}>
+        <View style={styles.rodape}>
           <Pressable onPress={tirarFoto} disabled={capturando} style={styles.botaoCapturar}>
             {capturando && <ActivityIndicator color="#0f172a" />}
           </Pressable>
-        </SafeAreaView>
+        </View>
       </View>
     </Modal>
   )
@@ -173,7 +172,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 8,
+    // Fixo (não SafeAreaView) de propósito: dentro de um <Modal>, o
+    // react-native-safe-area-context às vezes não calcula o inset direito
+    // (janela nativa separada) -- achado real: botão "Fechar" ficava fora
+    // da área visível, sem jeito de fechar a câmera. Valor generoso cobre
+    // notch/Dynamic Island/status bar sem depender desse cálculo.
+    paddingTop: Platform.OS === 'ios' ? 56 : 32,
   },
   botaoTopo: {
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -188,7 +192,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    paddingBottom: 24,
+    // Mesmo motivo do paddingTop acima -- cobre a faixa do indicador de
+    // início (home indicator) no iPhone sem SafeAreaView.
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
   },
   botaoCapturar: {
     width: 70,
