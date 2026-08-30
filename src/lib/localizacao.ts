@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import * as Location from 'expo-location'
 import { comTempoLimite } from './tempoLimite'
 
@@ -65,4 +66,25 @@ export async function obterLocalizacaoAtual(): Promise<LocalCapturado | null> {
   } catch {
     return null // GPS sem fix, permissão negada/travada, serviço desligado -- best-effort
   }
+}
+
+/**
+ * Dispara a busca assim que o componente monta e devolve o resultado
+ * assim que resolver (null até lá) -- mesmo padrão já usado dentro de
+ * useCapturaComLocal.ts (câmera de abastecimento/checklist), extraído
+ * pra cá pra também servir a câmera do chat, que não passa por aquele
+ * hook. `iniciada` evita disparar 2x no duplo-mount do modo de
+ * desenvolvimento do React.
+ */
+export function usePrefetchLocalizacao(): LocalCapturado | null {
+  const [local, setLocal] = useState<LocalCapturado | null>(null)
+  const iniciada = useRef(false)
+
+  useEffect(() => {
+    if (iniciada.current) return
+    iniciada.current = true
+    obterLocalizacaoAtual().then(setLocal)
+  }, [])
+
+  return local
 }

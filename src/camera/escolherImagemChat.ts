@@ -1,7 +1,8 @@
 import { File, Paths } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
-import { abrirCameraCustomizada } from './CameraCustomizada'
+import type { ContextoMarcaDagua } from './CameraCustomizada'
+import { capturarFoto } from './capturarFoto'
 import { comTempoLimite } from '../lib/tempoLimite'
 import { uuid } from '../lib/uuid'
 
@@ -45,24 +46,33 @@ async function comprimirFoto(uriOriginal: string): Promise<MidiaEscolhida> {
 
 /**
  * Câmera (só foto) ou galeria (foto e vídeo, estilo WhatsApp) pra anexar
- * no chat -- não é o mesmo fluxo de capturarFoto.ts (que é só câmera, pras
- * 3 fotos obrigatórias do abastecimento/manutenção), mas usa a MESMA
- * câmera própria do app (CameraCustomizada -- ver capturarFoto.ts), só
- * sem marca d'água (não passa contexto nenhum). Achado real: manter os
- * dois lados usando câmeras diferentes (esta usava
+ * no chat -- reaproveita capturarFoto() (mesma câmera própria do app,
+ * já com compressão embutida) em vez de chamar abrirCameraCustomizada()
+ * direto, pra não duplicar aquele passo aqui. `marcaDagua` é opcional:
+ * quando vem preenchido (nome + localização, sem placa -- não tem
+ * veículo nenhum associado a uma foto de chat), mostra a mesma faixa ao
+ * vivo da câmera de abastecimento/checklist, só que puramente uma
+ * prévia -- o chat não carimba nada de verdade no arquivo (ver
+ * enviarAnexoMensagem em lib/api.ts), diferente daquele fluxo. Achado
+ * real: manter os dois lados usando câmeras diferentes (esta usava
  * ImagePicker.launchCameraAsync antes) fazia só o lado do chat falhar em
  * silêncio -- as duas APIs de câmera (expo-camera e expo-image-picker)
  * competindo pelo hardware. Unificar resolveu.
  *
- * Foto passa pela mesma compressão de sempre (reduz tamanho antes de sair
- * pra rede de campo); vídeo (só vem da galeria) vai puro -- comprimir
- * vídeo em client é caro e a lib de imagem não serve pra isso.
+ * Vídeo (só vem da galeria) vai puro -- comprimir vídeo em client é caro
+ * e a lib de imagem não serve pra isso.
  */
-export async function escolherImagemChat(fonte: 'camera' | 'galeria'): Promise<ResultadoEscolhaMidia> {
+export async function escolherImagemChat(
+  fonte: 'camera' | 'galeria',
+  marcaDagua?: ContextoMarcaDagua,
+): Promise<ResultadoEscolhaMidia> {
   if (fonte === 'camera') {
-    const uri = await abrirCameraCustomizada()
+    // capturarFoto() já comprime e persiste (mesmo passo que a foto de
+    // abastecimento/checklist usa) -- nada a mais a fazer aqui além de
+    // embrulhar o resultado no formato que este módulo devolve.
+    const uri = await capturarFoto(marcaDagua)
     if (!uri) return { ok: false, motivo: 'cancelado' }
-    return { ok: true, midia: await comprimirFoto(uri) }
+    return { ok: true, midia: { uri, nome: `foto-${uuid()}.jpg`, categoria: 'IMAGEM', mime: 'image/jpeg' } }
   }
 
   let permissao: { granted: boolean }

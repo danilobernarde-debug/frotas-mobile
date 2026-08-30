@@ -10,9 +10,10 @@ import {
 } from 'expo-audio'
 import { useState } from 'react'
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { useAuth } from '../../auth/useAuth'
 import { escolherImagemChat } from '../../camera/escolherImagemChat'
 import { duracaoAudio } from '../../lib/formato'
-import { obterLocalizacaoAtual } from '../../lib/localizacao'
+import { obterLocalizacaoAtual, usePrefetchLocalizacao } from '../../lib/localizacao'
 import type { CategoriaAnexoUpload, CategoriaSolicitacao } from '../../lib/tipos'
 import {
   TIPO_MENSAGEM,
@@ -46,11 +47,23 @@ export function BarraEntrada({
   respondendoA?: RespondendoA | null
   aoLimparResposta?: () => void
 }) {
+  const { perfil } = useAuth()
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [anexo, setAnexo] = useState<AnexoEscolhido | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [buscandoLocalizacao, setBuscandoLocalizacao] = useState(false)
+  // Dispara a busca de GPS assim que o chat abre (não só quando a câmera
+  // é tocada) -- dá tempo de já estar resolvido a tempo de mostrar na
+  // faixa AO VIVO da câmera (marcaDaguaChat abaixo), mesmo espírito de
+  // useCapturaComLocal (câmera de abastecimento/checklist).
+  const localAtual = usePrefetchLocalizacao()
+  const marcaDaguaChat = {
+    nomeMotorista: perfil?.motoristaNome,
+    latitude: localAtual?.latitude,
+    longitude: localAtual?.longitude,
+    localizacaoRotulo: localAtual?.rotulo ?? undefined,
+  }
 
   const gravador = useAudioRecorder(RecordingPresets.HIGH_QUALITY)
   const estadoGravador = useAudioRecorderState(gravador, 200)
@@ -71,7 +84,7 @@ export function BarraEntrada({
       })
       return
     }
-    const resultado = await escolherImagemChat(fonte)
+    const resultado = await escolherImagemChat(fonte, fonte === 'camera' ? marcaDaguaChat : undefined)
     if (!resultado.ok) {
       if (resultado.motivo === 'permissao') {
         setErro(

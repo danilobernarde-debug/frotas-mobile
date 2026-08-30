@@ -32,11 +32,20 @@ export function useCapturaComLocal() {
   const [capturando, setCapturando] = useState(false)
   const localizacaoPromise = useRef<Promise<LocalCapturado | null> | null>(null)
   const localizacaoIniciada = useRef(false)
+  // Espelha o resultado da MESMA promise em estado -- é o que permite
+  // mostrar a localização já resolvida na faixa AO VIVO da câmera
+  // (marcaDagua abaixo), não só depois da foto tirada. Fica null
+  // enquanto o GPS ainda não respondeu (a faixa mostra "Localização não
+  // disponível" nesse meio tempo, e não atualiza sozinha depois -- só a
+  // PRÓXIMA foto já pega o valor resolvido).
+  const [localAtual, setLocalAtual] = useState<LocalCapturado | null>(null)
 
   useEffect(() => {
     if (!localizacaoIniciada.current) {
       localizacaoIniciada.current = true
-      localizacaoPromise.current = obterLocalizacaoAtual()
+      const promessa = obterLocalizacaoAtual()
+      localizacaoPromise.current = promessa
+      promessa.then(setLocalAtual)
     }
   }, [])
 
@@ -63,7 +72,18 @@ export function useCapturaComLocal() {
     marcaDagua?: ContextoMarcaDagua,
   ): Promise<FotoComLocal | null> {
     setCapturando(true)
-    const uri = await capturarFoto(marcaDagua)
+    // Localização entra aqui, não em quem chama -- localAtual já é o
+    // resultado da MESMA busca (iniciada no mount deste hook) que
+    // completarLocal() usa depois da foto; se já resolveu a tempo (comum,
+    // já que começa cedo), a faixa ao vivo já mostra local de verdade em
+    // vez de "não disponível".
+    const marcaDaguaCompleta: ContextoMarcaDagua | undefined = marcaDagua && {
+      ...marcaDagua,
+      latitude: localAtual?.latitude,
+      longitude: localAtual?.longitude,
+      localizacaoRotulo: localAtual?.rotulo ?? undefined,
+    }
+    const uri = await capturarFoto(marcaDaguaCompleta)
     setCapturando(false)
     if (!uri) return null
 

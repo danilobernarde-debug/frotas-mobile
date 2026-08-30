@@ -31,7 +31,14 @@ function montarLinhas(props: PreviaMarcaDaguaProps): string[] {
       )
     : ['Localização não disponível']
 
-  return [dataHoraLocal(capturadaEm), `Motorista: ${nomeMotorista ?? '—'}`, ...linhasLocal, `Placa: ${placa ?? '—'}`]
+  // placa === undefined (não null) -- não some a linha da câmera de
+  // abastecimento/checklist (ali placa vira null só antes de escolher
+  // veículo, tratado como "—" de propósito); some é só quando quem chama
+  // nem tem noção de veículo nenhuma, como a câmera do chat -- lá a linha
+  // inteira não faz sentido (pedido do usuário: só data/motorista/local).
+  const linhaPlaca = placa !== undefined ? [`Placa: ${placa ?? '—'}`] : []
+
+  return [dataHoraLocal(capturadaEm), `Motorista: ${nomeMotorista ?? '—'}`, ...linhasLocal, ...linhaPlaca]
 }
 
 /**
