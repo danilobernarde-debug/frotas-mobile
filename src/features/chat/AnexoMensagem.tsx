@@ -256,7 +256,12 @@ const styles = StyleSheet.create({
   },
   audioOutro: { backgroundColor: 'rgba(15,23,42,0.06)' },
   audioProprio: { backgroundColor: 'rgba(255,255,255,0.15)' },
-  audioBotao: { fontSize: 16, color: '#0f766e', width: 20, textAlign: 'center' },
+  // minWidth (não width) -- '⏸' renderiza mais largo que '▶' em algumas
+  // fontes/telas, e width fixo cortava o glyph em vez de deixar caber
+  // (achado real, reportado pelo usuário: "o ícone de pausa aparece
+  // cortado"). lineHeight igual ao fontSize evita um corte vertical
+  // parecido, já que '⏸' também costuma vir com mais altura que '▶'.
+  audioBotao: { fontSize: 16, lineHeight: 18, color: '#0f766e', minWidth: 20, textAlign: 'center' },
   audioBotaoProprio: { color: '#fff' },
   audioBarraFundo: { flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(15,23,42,0.15)' },
   audioBarraProgresso: { height: 3, borderRadius: 2, backgroundColor: '#0d9488' },
