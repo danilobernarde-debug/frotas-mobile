@@ -8,7 +8,7 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useAuth } from '../../auth/useAuth'
 import { escolherImagemChat } from '../../camera/escolherImagemChat'
@@ -73,22 +73,42 @@ export function BarraEntrada({
   const gravador = useAudioRecorder(RecordingPresets.HIGH_QUALITY)
   const estadoGravador = useAudioRecorderState(gravador, 200)
   const gravando = estadoGravador.isRecording
+  // Trava simples contra chamada dobrada -- se o 1º toque em "Documento"/
+  // "Foto ou vídeo"/"Câmera" ainda não resolveu (ex.: o seletor nativo
+  // demorou pra aparecer) e o usuário toca de novo, um 2º
+  // getDocumentAsync()/launchImageLibraryAsync() em cima do 1º é
+  // exatamente o que causa "Different document picking in progress"
+  // (achado real, visto no log). Ignora toques repetidos até o atual
+  // terminar, em vez de empilhar.
+  const escolhendoAnexo = useRef(false)
 
   async function aoEscolherAnexo(fonte: 'camera' | 'galeria' | 'documento') {
+    if (escolhendoAnexo.current) return
+    escolhendoAnexo.current = true
     setErro(null)
-    if (fonte === 'documento') {
-      const resultado = await DocumentPicker.getDocumentAsync({ type: '*/*' })
-      if (resultado.canceled || !resultado.assets[0]) return
-      const doc = resultado.assets[0]
-      setAnexo({
-        tipo: 'arquivo',
-        uriLocal: doc.uri,
-        nomeArquivo: doc.name,
-        mime: doc.mimeType || 'application/octet-stream',
-        categoria: 'DOCUMENTO',
-      })
-      return
+    try {
+      if (fonte === 'documento') {
+        const resultado = await DocumentPicker.getDocumentAsync({ type: '*/*' })
+        if (resultado.canceled || !resultado.assets[0]) return
+        const doc = resultado.assets[0]
+        setAnexo({
+          tipo: 'arquivo',
+          uriLocal: doc.uri,
+          nomeArquivo: doc.name,
+          mime: doc.mimeType || 'application/octet-stream',
+          categoria: 'DOCUMENTO',
+        })
+        return
+      }
+      await aoEscolherFotoOuVideo(fonte)
+    } catch {
+      setErro('Não consegui abrir o seletor -- tenta de novo em alguns segundos.')
+    } finally {
+      escolhendoAnexo.current = false
     }
+  }
+
+  async function aoEscolherFotoOuVideo(fonte: 'camera' | 'galeria') {
     const resultado = await escolherImagemChat(fonte, fonte === 'camera' ? marcaDaguaChat : undefined)
     if (!resultado.ok) {
       if (resultado.motivo === 'permissao') {

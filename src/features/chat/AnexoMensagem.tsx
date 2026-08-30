@@ -151,7 +151,18 @@ function PlayerAudio({ url, minhaPropria }: { url: string; minhaPropria: boolean
 
 const styles = StyleSheet.create({
   imagem: { width: 220, height: 220, borderRadius: 10, marginBottom: 4 },
-  fundoAmpliada: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)' },
+  // alignItems/justifyContent 'center': sem isto, o FotoAmpliada de dentro
+  // (que ocupa 100% de largura mas só 85% de altura) fica ancorado no
+  // topo-esquerda por padrão, deixando parte da foto empurrada fora da
+  // tela em vez de centralizada -- mesmo estilo que a tela de
+  // abastecimento/checklist já usa pro mesmo Modal (achado real,
+  // relatado pelo usuário: "abre só que uma parte fica fora da tela").
+  fundoAmpliada: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   video: { width: 220, height: 220, borderRadius: 10, marginBottom: 4, backgroundColor: '#000' },
   documento: {
     flexDirection: 'row',

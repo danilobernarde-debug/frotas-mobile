@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import type { CategoriaSolicitacao } from '../../lib/tipos'
 
 /** Lista extensível de propósito -- uma 3ª opção no futuro é só somar um
@@ -49,15 +49,18 @@ export function MenuAnexo({
    *  verdade -- abrir outra UI nativa (câmera, seletor de foto/vídeo,
    *  seletor de documento) enquanto ESTE modal ainda está no meio da
    *  animação de fechar pode falhar em silêncio no iOS (a nova
-   *  apresentação se perde) -- achado real: usuário relatou os itens do
-   *  menu não abrindo nada. Uma 1ª tentativa com setTimeout(300ms) não
-   *  foi confiável o bastante -- onDismiss do Modal (iOS) só dispara
-   *  quando a transição REALMENTE terminou, sem depender de adivinhar um
-   *  tempo fixo. Android não tem onDismiss confiável, mantém o atraso ali. */
+   *  apresentação se perde, ou pior: o seletor nativo fica "preso"
+   *  esperando, e a PRÓXIMA tentativa esbarra nele -- expo-document-picker
+   *  chega a lançar "Different document picking in progress"). Duas
+   *  tentativas antes desta não foram confiáveis sozinhas: setTimeout(300ms)
+   *  fixo, depois só onDismiss (iOS) -- Modal transparent nem sempre
+   *  dispara onDismiss de forma consistente. Agora os dois juntos, com
+   *  disparo único (dispararPendente zera acaoPendente no 1º disparo,
+   *  então não importa qual dos dois chega primeiro -- o outro vira no-op). */
   function fecharEDepois(acao: () => void) {
     acaoPendente.current = acao
     setAberto(false)
-    if (Platform.OS !== 'ios') setTimeout(dispararPendente, 300)
+    setTimeout(dispararPendente, 400)
   }
 
   return (
