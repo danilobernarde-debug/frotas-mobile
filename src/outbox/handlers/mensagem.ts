@@ -1,7 +1,7 @@
 import { enviarAnexoMensagem, type AnexoMensagemEnviado } from '../../lib/api'
 import { classificarErroSupabase, VIOLACAO_UNICIDADE } from '../../lib/erroSupabase'
 import { supabase } from '../../lib/supabase'
-import type { CategoriaAnexoMensagem } from '../../lib/tipos'
+import type { CategoriaAnexoUpload } from '../../lib/tipos'
 import { registrarHandler } from '../handlerRegistry'
 import type { ContextoEnvio, ResultadoEnvio } from '../types'
 
@@ -9,13 +9,18 @@ export interface AnexoMensagemPayload {
   uriLocal: string
   nomeArquivo: string
   mime: string
-  categoria: CategoriaAnexoMensagem
+  categoria: CategoriaAnexoUpload
   duracaoSegundos?: number
   /** Preenchido depois que o upload pro Drive dá certo (ver enviar()
    *  abaixo) -- protege um retry de subir o mesmo arquivo duas vezes.
    *  frota_mensagens não tem UPDATE, então o upload sempre acontece ANTES
    *  do insert, nunca depois. */
   enviado?: AnexoMensagemEnviado
+}
+
+export interface LocalizacaoMensagemPayload {
+  latitude: number
+  longitude: number
 }
 
 export interface MensagemPayload {
@@ -28,10 +33,14 @@ export interface MensagemPayload {
   /** Id da solicitação (abastecimento/manutenção) sendo respondida,
    *  quando a resposta é sobre uma solicitação em vez de uma mensagem. */
   respondendoAprovacaoId?: number
-  /** Imagem/áudio/documento anexado, estilo WhatsApp -- texto vira legenda
-   *  opcional quando presente (mesma regra da constraint
-   *  frota_mensagens_texto_ou_anexo, migration 0030). */
+  /** Imagem/vídeo/áudio/documento anexado, estilo WhatsApp -- texto vira
+   *  legenda opcional quando presente (mesma regra da constraint
+   *  frota_mensagens_texto_ou_anexo, migrations 0030/0031). Nunca junto
+   *  com localizacao -- é um ou outro. */
   anexo?: AnexoMensagemPayload
+  /** Localização atual compartilhada -- não é arquivo, não passa pelo
+   *  upload pro Drive (ver migration 0031). */
+  localizacao?: LocalizacaoMensagemPayload
 }
 
 export const TIPO_MENSAGEM = 'MENSAGEM'
@@ -83,6 +92,13 @@ async function enviar(
           anexo_nome: anexo.nomeArquivo,
           anexo_tamanho: anexo.enviado.tamanho,
           anexo_duracao_segundos: anexo.duracaoSegundos ?? null,
+        }
+      : {}),
+    ...(payload.localizacao
+      ? {
+          anexo_tipo: 'LOCALIZACAO',
+          anexo_latitude: payload.localizacao.latitude,
+          anexo_longitude: payload.localizacao.longitude,
         }
       : {}),
   })

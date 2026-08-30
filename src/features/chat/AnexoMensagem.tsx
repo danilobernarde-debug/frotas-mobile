@@ -1,4 +1,5 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio'
+import { useVideoPlayer, VideoView } from 'expo-video'
 import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth/useAuth'
 import { urlAnexoMensagem } from '../../lib/api'
@@ -6,15 +7,35 @@ import { duracaoAudio, tamanhoArquivo } from '../../lib/formato'
 import type { Mensagem } from '../../lib/tipos'
 
 /**
- * Anexo dentro da bolha de uma mensagem já sincronizada -- imagem/áudio
- * tocam inline, documento abre no visualizador do sistema. Espelha
- * AnexoMensagem de frotas-web/src/app/(painel)/atividade/thread.tsx.
+ * Anexo dentro da bolha de uma mensagem já sincronizada -- imagem/vídeo/
+ * áudio tocam inline, documento abre no visualizador do sistema,
+ * localização vira link pro mapa (não é arquivo, não precisa de token).
+ * Espelha AnexoMensagem de frotas-web/src/app/(painel)/atividade/thread.tsx.
  */
 export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; minhaPropria: boolean }) {
   const { sessao } = useAuth()
   const token = sessao?.access_token
 
-  if (!mensagem.anexo_caminho || !mensagem.anexo_tipo || !token) return null
+  if (!mensagem.anexo_tipo) return null
+
+  if (mensagem.anexo_tipo === 'LOCALIZACAO') {
+    if (mensagem.anexo_latitude == null || mensagem.anexo_longitude == null) return null
+    return (
+      <Pressable
+        onPress={() =>
+          Linking.openURL(`https://www.google.com/maps?q=${mensagem.anexo_latitude},${mensagem.anexo_longitude}`)
+        }
+        style={[styles.documento, minhaPropria ? styles.documentoProprio : styles.documentoOutro]}
+      >
+        <Text style={styles.documentoIcone}>📍</Text>
+        <Text style={[styles.documentoNome, minhaPropria && styles.documentoNomeProprio]}>
+          Ver localização no mapa
+        </Text>
+      </Pressable>
+    )
+  }
+
+  if (!mensagem.anexo_caminho || !token) return null
   const url = urlAnexoMensagem(mensagem.id)
 
   if (mensagem.anexo_tipo === 'IMAGEM') {
@@ -25,6 +46,10 @@ export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; 
         resizeMode="cover"
       />
     )
+  }
+
+  if (mensagem.anexo_tipo === 'VIDEO') {
+    return <PlayerVideo url={url} token={token} />
   }
 
   if (mensagem.anexo_tipo === 'AUDIO') {
@@ -52,6 +77,11 @@ export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; 
       </View>
     </Pressable>
   )
+}
+
+function PlayerVideo({ url, token }: { url: string; token: string }) {
+  const player = useVideoPlayer({ uri: url, headers: { Authorization: `Bearer ${token}` } })
+  return <VideoView player={player} style={styles.video} nativeControls contentFit="cover" />
 }
 
 function PlayerAudio({ url, token, minhaPropria }: { url: string; token: string; minhaPropria: boolean }) {
@@ -93,6 +123,7 @@ function PlayerAudio({ url, token, minhaPropria }: { url: string; token: string;
 
 const styles = StyleSheet.create({
   imagem: { width: 220, height: 220, borderRadius: 10, marginBottom: 4 },
+  video: { width: 220, height: 220, borderRadius: 10, marginBottom: 4, backgroundColor: '#000' },
   documento: {
     flexDirection: 'row',
     alignItems: 'center',

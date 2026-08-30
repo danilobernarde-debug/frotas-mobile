@@ -8,6 +8,8 @@ const ROTULO_ANEXO: Record<NonNullable<Mensagem['anexo_tipo']>, string> = {
   IMAGEM: '📷 Foto',
   AUDIO: '🎤 Áudio',
   DOCUMENTO: '📄 Documento',
+  VIDEO: '🎬 Vídeo',
+  LOCALIZACAO: '📍 Localização',
 }
 
 export function previaMensagem(m: Mensagem): string {

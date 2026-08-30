@@ -95,6 +95,7 @@ export function BolhaMensagem({
   // do servidor, nunca aparece como item local.
   const item = entrada.item
   const anexoLocal = item.payload.anexo
+  const localizacaoLocal = item.payload.localizacao
   return (
     <View style={[styles.linha, styles.linhaDireita]}>
       <View style={[styles.bolha, styles.bolhaPropria, styles.bolhaLocal]}>
@@ -103,9 +104,14 @@ export function BolhaMensagem({
         )}
         {anexoLocal && anexoLocal.categoria !== 'IMAGEM' && (
           <Text style={styles.textoProprio}>
-            {anexoLocal.categoria === 'AUDIO' ? '🎤 Áudio' : `📄 ${anexoLocal.nomeArquivo}`}
+            {anexoLocal.categoria === 'AUDIO'
+              ? '🎤 Áudio'
+              : anexoLocal.categoria === 'VIDEO'
+                ? '🎬 Vídeo'
+                : `📄 ${anexoLocal.nomeArquivo}`}
           </Text>
         )}
+        {localizacaoLocal && <Text style={styles.textoProprio}>📍 Localização</Text>}
         {item.payload.texto && <Text style={styles.textoProprio}>{item.payload.texto}</Text>}
         {item.permanente && item.erroMsg && <Text style={styles.erroMsg}>{item.erroMsg}</Text>}
         <Text style={styles.status}>

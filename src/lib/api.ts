@@ -1,4 +1,5 @@
 import { APP_URL } from './env'
+import type { CategoriaAnexoUpload } from './tipos'
 
 export function urlAnexo(alvo: 'aprovacoes' | 'checklists', anexoId: number): string {
   return `${APP_URL}/api/mobile/anexos/${anexoId}?alvo=${alvo}`
@@ -91,7 +92,7 @@ export async function enviarAnexoMensagem(params: {
   uriArquivo: string
   nomeArquivo: string
   mime: string
-  categoria: 'IMAGEM' | 'AUDIO' | 'DOCUMENTO'
+  categoria: CategoriaAnexoUpload
   tokenAcesso: string
 }): Promise<AnexoMensagemEnviado> {
   const form = new FormData()

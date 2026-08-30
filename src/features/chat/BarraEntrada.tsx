@@ -3,6 +3,8 @@ import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
+  useAudioPlayer,
+  useAudioPlayerStatus,
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio'
@@ -10,28 +12,28 @@ import { useState } from 'react'
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { escolherImagemChat } from '../../camera/escolherImagemChat'
 import { duracaoAudio } from '../../lib/formato'
-import type { CategoriaAnexoMensagem, CategoriaSolicitacao } from '../../lib/tipos'
-import { TIPO_MENSAGEM, type AnexoMensagemPayload, type MensagemPayload } from '../../outbox/handlers/mensagem'
+import { obterLocalizacaoAtual } from '../../lib/localizacao'
+import type { CategoriaAnexoUpload, CategoriaSolicitacao } from '../../lib/tipos'
+import {
+  TIPO_MENSAGEM,
+  type AnexoMensagemPayload,
+  type LocalizacaoMensagemPayload,
+  type MensagemPayload,
+} from '../../outbox/handlers/mensagem'
 import { enfileirar } from '../../outbox/outbox'
 import { runSync } from '../../outbox/syncEngine'
 import { MenuAnexo } from './MenuAnexo'
-import { MenuAnexoArquivo } from './MenuAnexoArquivo'
 import type { RespondendoA } from './types'
 
-interface AnexoEscolhido {
-  uriLocal: string
-  nomeArquivo: string
-  mime: string
-  categoria: CategoriaAnexoMensagem
-  duracaoSegundos?: number
-}
+type AnexoEscolhido =
+  | { tipo: 'arquivo'; uriLocal: string; nomeArquivo: string; mime: string; categoria: CategoriaAnexoUpload; duracaoSegundos?: number }
+  | { tipo: 'localizacao'; latitude: number; longitude: number }
 
 /**
- * Rodapé estilo WhatsApp: "+" abre o tipo de solicitação (MenuAnexo, apesar
- * do nome -- não é anexo de arquivo, ver comentário lá), 📎 (MenuAnexoArquivo)
- * abre câmera/galeria/documento pro chat de verdade, campo de texto no
- * meio, enviar/microfone à direita (alterna conforme tem conteúdo ou não,
- * igual BarraEntrada do painel web faz com habilitaEnviar).
+ * Rodapé estilo WhatsApp: "+" (MenuAnexo) reúne solicitação (abastecimento/
+ * manutenção) E anexo de arquivo/localização num menu só, campo de texto
+ * no meio, enviar/microfone à direita (alterna conforme tem conteúdo ou
+ * não, igual BarraEntrada do painel web faz com habilitaEnviar).
  */
 export function BarraEntrada({
   onNovaCategoria,
@@ -48,6 +50,7 @@ export function BarraEntrada({
   const [enviando, setEnviando] = useState(false)
   const [anexo, setAnexo] = useState<AnexoEscolhido | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [buscandoLocalizacao, setBuscandoLocalizacao] = useState(false)
 
   const gravador = useAudioRecorder(RecordingPresets.HIGH_QUALITY)
   const estadoGravador = useAudioRecorderState(gravador, 200)
@@ -60,6 +63,7 @@ export function BarraEntrada({
       if (resultado.canceled || !resultado.assets[0]) return
       const doc = resultado.assets[0]
       setAnexo({
+        tipo: 'arquivo',
         uriLocal: doc.uri,
         nomeArquivo: doc.name,
         mime: doc.mimeType || 'application/octet-stream',
@@ -67,9 +71,28 @@ export function BarraEntrada({
       })
       return
     }
-    const imagem = await escolherImagemChat(fonte)
-    if (!imagem) return
-    setAnexo({ uriLocal: imagem.uri, nomeArquivo: imagem.nome, mime: 'image/jpeg', categoria: 'IMAGEM' })
+    const midia = await escolherImagemChat(fonte)
+    if (!midia) return
+    setAnexo({
+      tipo: 'arquivo',
+      uriLocal: midia.uri,
+      nomeArquivo: midia.nome,
+      mime: midia.mime,
+      categoria: midia.categoria,
+      duracaoSegundos: midia.duracaoSegundos,
+    })
+  }
+
+  async function aoEscolherLocalizacao() {
+    setErro(null)
+    setBuscandoLocalizacao(true)
+    const local = await obterLocalizacaoAtual()
+    setBuscandoLocalizacao(false)
+    if (!local) {
+      setErro('Não consegui obter sua localização -- confira o GPS/permissão do aparelho.')
+      return
+    }
+    setAnexo({ tipo: 'localizacao', latitude: local.latitude, longitude: local.longitude })
   }
 
   async function iniciarGravacao() {
@@ -94,6 +117,7 @@ export function BarraEntrada({
     const uri = gravador.uri
     if (!uri || duracaoSegundos < 1) return // gravação vazia/cancelada rápido demais -- não vira anexo
     setAnexo({
+      tipo: 'arquivo',
       uriLocal: uri,
       nomeArquivo: `audio-${Date.now()}.m4a`,
       mime: 'audio/m4a',
@@ -107,19 +131,23 @@ export function BarraEntrada({
     if (!digitado && !anexo) return
     setEnviando(true)
 
-    const anexoPayload: AnexoMensagemPayload | undefined = anexo
-      ? {
-          uriLocal: anexo.uriLocal,
-          nomeArquivo: anexo.nomeArquivo,
-          mime: anexo.mime,
-          categoria: anexo.categoria,
-          duracaoSegundos: anexo.duracaoSegundos,
-        }
-      : undefined
+    const anexoPayload: AnexoMensagemPayload | undefined =
+      anexo?.tipo === 'arquivo'
+        ? {
+            uriLocal: anexo.uriLocal,
+            nomeArquivo: anexo.nomeArquivo,
+            mime: anexo.mime,
+            categoria: anexo.categoria,
+            duracaoSegundos: anexo.duracaoSegundos,
+          }
+        : undefined
+    const localizacaoPayload: LocalizacaoMensagemPayload | undefined =
+      anexo?.tipo === 'localizacao' ? { latitude: anexo.latitude, longitude: anexo.longitude } : undefined
 
     await enfileirar<MensagemPayload>(TIPO_MENSAGEM, {
       texto: digitado || undefined,
       anexo: anexoPayload,
+      localizacao: localizacaoPayload,
       respondendoA: respondendoA?.tipo === 'mensagem' ? respondendoA.id : undefined,
       respondendoAprovacaoId: respondendoA?.tipo === 'solicitacao' ? respondendoA.id : undefined,
     })
@@ -152,16 +180,25 @@ export function BarraEntrada({
       )}
 
       {erro && <Text style={styles.erro}>{erro}</Text>}
+      {buscandoLocalizacao && <Text style={styles.info}>Obtendo localização…</Text>}
 
       {anexo && (
         <View style={styles.previaBarra}>
-          {anexo.categoria === 'IMAGEM' ? (
+          {anexo.tipo === 'localizacao' ? (
+            <Text style={styles.previaTexto} numberOfLines={1}>
+              📍 Localização atual selecionada
+            </Text>
+          ) : anexo.categoria === 'IMAGEM' ? (
             <Image source={{ uri: anexo.uriLocal }} style={styles.previaImagem} />
+          ) : anexo.categoria === 'VIDEO' ? (
+            <Text style={styles.previaTexto} numberOfLines={1}>
+              🎬 Vídeo{anexo.duracaoSegundos != null ? ` · ${duracaoAudio(anexo.duracaoSegundos)}` : ''}
+            </Text>
+          ) : anexo.categoria === 'AUDIO' ? (
+            <PreviaAudio uri={anexo.uriLocal} duracaoSegundos={anexo.duracaoSegundos} />
           ) : (
             <Text style={styles.previaTexto} numberOfLines={1}>
-              {anexo.categoria === 'AUDIO'
-                ? `🎤 Áudio · ${duracaoAudio(anexo.duracaoSegundos)}`
-                : `📄 ${anexo.nomeArquivo}`}
+              📄 {anexo.nomeArquivo}
             </Text>
           )}
           <Pressable onPress={() => setAnexo(null)} hitSlop={8}>
@@ -171,8 +208,12 @@ export function BarraEntrada({
       )}
 
       <View style={styles.barra}>
-        <MenuAnexo onEscolher={onNovaCategoria} desabilitado={gravando} />
-        <MenuAnexoArquivo onEscolher={aoEscolherAnexo} desabilitado={gravando} />
+        <MenuAnexo
+          onEscolher={onNovaCategoria}
+          onEscolherAnexo={aoEscolherAnexo}
+          onEscolherLocalizacao={aoEscolherLocalizacao}
+          desabilitado={gravando}
+        />
 
         <TextInput
           style={styles.campo}
@@ -211,6 +252,30 @@ export function BarraEntrada({
   )
 }
 
+/** Player simples pra ouvir o áudio ANTES de enviar (pedido do usuário) --
+ *  arquivo local, sem precisar de header de autenticação (diferente do
+ *  áudio já sincronizado, servido por /api/mobile/anexo-mensagem). */
+function PreviaAudio({ uri, duracaoSegundos }: { uri: string; duracaoSegundos?: number }) {
+  const player = useAudioPlayer({ uri })
+  const status = useAudioPlayerStatus(player)
+
+  function aoTocar() {
+    if (status.playing) {
+      player.pause()
+      return
+    }
+    if (status.currentTime >= status.duration && status.duration > 0) player.seekTo(0)
+    player.play()
+  }
+
+  return (
+    <Pressable onPress={aoTocar} style={styles.previaAudio}>
+      <Text style={styles.previaAudioBotao}>{status.playing ? '⏸' : '▶'}</Text>
+      <Text style={styles.previaTexto}>🎤 Áudio · {duracaoAudio(duracaoSegundos)}</Text>
+    </Pressable>
+  )
+}
+
 const styles = StyleSheet.create({
   respondendoBarra: {
     flexDirection: 'row',
@@ -228,6 +293,7 @@ const styles = StyleSheet.create({
   respondendoTexto: { fontSize: 12, color: '#64748b' },
   respondendoFechar: { fontSize: 16, color: '#94a3b8', paddingHorizontal: 4 },
   erro: { fontSize: 12, fontWeight: '600', color: '#dc2626', paddingHorizontal: 12, paddingTop: 6 },
+  info: { fontSize: 12, fontWeight: '600', color: '#64748b', paddingHorizontal: 12, paddingTop: 6 },
   previaBarra: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -241,6 +307,8 @@ const styles = StyleSheet.create({
   previaImagem: { width: 40, height: 40, borderRadius: 6 },
   previaTexto: { flex: 1, fontSize: 13, color: '#334155' },
   previaFechar: { fontSize: 16, color: '#94a3b8', paddingHorizontal: 6 },
+  previaAudio: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  previaAudioBotao: { fontSize: 16, color: '#0f766e', width: 18, textAlign: 'center' },
   barra: {
     flexDirection: 'row',
     // flex-end (não 'center'): conforme o campo cresce com o texto, o "+"

@@ -95,7 +95,10 @@ export interface RespostaChecklist {
   observacao: string | null
 }
 
-export type CategoriaAnexoMensagem = 'IMAGEM' | 'AUDIO' | 'DOCUMENTO'
+export type CategoriaAnexoMensagem = 'IMAGEM' | 'AUDIO' | 'DOCUMENTO' | 'VIDEO' | 'LOCALIZACAO'
+/** LOCALIZACAO nunca sobe arquivo -- só coordenada (ver migration 0031 em
+ *  frotas-web). */
+export type CategoriaAnexoUpload = Exclude<CategoriaAnexoMensagem, 'LOCALIZACAO'>
 
 export interface Mensagem {
   id: number
@@ -114,4 +117,6 @@ export interface Mensagem {
   anexo_nome: string | null
   anexo_tamanho: number | null
   anexo_duracao_segundos: number | null
+  anexo_latitude: number | null
+  anexo_longitude: number | null
 }
