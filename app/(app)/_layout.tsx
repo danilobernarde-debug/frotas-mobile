@@ -47,7 +47,15 @@ export default function LayoutApp() {
       <Stack.Screen name="chat" />
       <Stack.Screen name="checklists" />
       <Stack.Screen name="solicitacao/[id]" options={{ presentation: 'card' }} />
-      <Stack.Screen name="nova-solicitacao" options={{ presentation: 'modal' }} />
+      {/* presentation: 'modal' (era assim antes) trava a abertura da
+          câmera custom -- CameraCustomizadaHost usa <Modal> do RN, que não
+          empilha direito sobre uma tela JÁ apresentada como modal nativo
+          (achado real: câmera do abastecimento ficava girando pra sempre,
+          checklists/novo -- 'card', sem esse problema -- funcionava normal
+          com a mesma câmera). 'card' resolve; troca só a animação de
+          entrada (desliza da direita, não sobe de baixo), tela em si não
+          muda. */}
+      <Stack.Screen name="nova-solicitacao" options={{ presentation: 'card' }} />
     </Stack>
   )
 }
