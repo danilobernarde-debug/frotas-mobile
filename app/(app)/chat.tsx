@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   FlatList,
@@ -39,6 +39,14 @@ export default function TelaChat() {
   const { perfil } = useAuth()
   const { entradas, carregando, recarregar } = useMinhasSolicitacoes()
   const entradasComDivisor = useDivisorNaoLidas(inserirDivisoresData(entradas))
+  // FlatList invertida (index 0 = mais recente, embaixo na tela) -- é o
+  // que faz o chat abrir DIRETO no fim, sem nenhum scroll via JS (mesmo
+  // truque de flex-col-reverse já usado no painel web, ver thread.tsx).
+  // Antes disto, a lista renderizava do topo (mais antigo) e só DEPOIS
+  // pulava pro fim via scrollToOffset em setTimeout -- dava pra ver o
+  // salto ao abrir a conversa (pedido do usuário: reconstruir sem esse
+  // pulo visível).
+  const entradasInvertidas = useMemo(() => [...entradasComDivisor].reverse(), [entradasComDivisor])
   const { pendentes, sincronizando, ultimoErro } = useSyncStatus()
   const conectado = useNetworkStatus()
 
@@ -105,7 +113,7 @@ export default function TelaChat() {
    *  não é confiável pra itens fora da janela renderizada; o próprio
    *  React Native recomenda esse fallback em onScrollToIndexFailed. */
   function irPara(alvoId: string) {
-    const indice = entradasComDivisor.findIndex((e) => e.id === alvoId)
+    const indice = entradasInvertidas.findIndex((e) => e.id === alvoId)
     if (indice === -1) return
     listaRef.current?.scrollToIndex({ index: indice, animated: true })
     destacar(alvoId)
@@ -129,12 +137,6 @@ export default function TelaChat() {
     listaRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false })
     setTimeout(() => listaRef.current?.scrollToIndex({ index: info.index, animated: true }), 150)
   }
-  // Rola pro final só na 1ª vez que a lista ganha conteúdo -- ao abrir o
-  // chat, as mensagens mais recentes já aparecem na tela, sem precisar
-  // arrastar (igual WhatsApp). Só uma vez: atualizações depois (poll,
-  // nova mensagem chegando) não devem puxar a rolagem de quem já subiu
-  // pra ler o histórico.
-  const jaRolou = useRef(false)
 
   // Selo flutuante de data (estilo WhatsApp): mostra a data do topo da
   // tela enquanto rola, some sozinho pouco depois de parar.
@@ -143,9 +145,16 @@ export default function TelaChat() {
   const timeoutSeloData = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const aoMudarItensVisiveis = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const primeiro = viewableItems[0]?.item as EntradaChat | undefined
-    if (!primeiro) return
-    setDataSelo(primeiro.tipo === 'divisor' ? primeiro.rotulo : diaRelativo(primeiro.criadoEm))
+    if (viewableItems.length === 0) return
+    // Lista invertida: índice 0 é sempre o mais recente (embaixo na
+    // tela), então o item "no topo da tela" -- o que o selo de data
+    // representa -- é o de MAIOR índice entre os visíveis, não o
+    // primeiro do array (viewableItems não garante essa ordem sozinho).
+    const doTopo = viewableItems.reduce((maisAlto, v) =>
+      (v.index ?? -1) > (maisAlto.index ?? -1) ? v : maisAlto,
+    )
+    const item = doTopo.item as EntradaChat
+    setDataSelo(item.tipo === 'divisor' ? item.rotulo : diaRelativo(item.criadoEm))
   }).current
   const configuracaoVisibilidade = useRef({ itemVisiblePercentThreshold: 0 }).current
 
@@ -163,28 +172,6 @@ export default function TelaChat() {
       if (timeoutDestaque.current) clearTimeout(timeoutDestaque.current)
     }
   }, [])
-
-  // onContentSizeChange (1ª tentativa) não disparava de forma confiável
-  // no Android -- mesma categoria de instabilidade de plataforma já
-  // achada com <Image> nesta sessão. useEffect + timeout curto (dá
-  // tempo do layout da lista assentar antes de rolar) é o padrão mais
-  // robusto pra isso.
-  useEffect(() => {
-    if (jaRolou.current || carregando || entradasComDivisor.length === 0) return
-    jaRolou.current = true
-    // scrollToEnd() sozinho não rolava de forma confiável (depende de
-    // medição de conteúdo que nem sempre está pronta a tempo no
-    // Android). scrollToOffset com um valor bem maior que qualquer
-    // conteúdo possível força o máximo, sem depender dessa medição --
-    // e repete a chamada mais uma vez logo depois, cobrindo o caso de
-    // mais itens ainda estarem entrando no layout.
-    const idA = setTimeout(() => listaRef.current?.scrollToOffset({ offset: 999999, animated: false }), 150)
-    const idB = setTimeout(() => listaRef.current?.scrollToOffset({ offset: 999999, animated: false }), 500)
-    return () => {
-      clearTimeout(idA)
-      clearTimeout(idB)
-    }
-  }, [carregando, entradasComDivisor.length])
 
   // ultimoErro vem do motor de sincronização (assinarEstadoSync) -- é a
   // mensagem da última falha de envio (solicitação, foto, checklist ou
@@ -218,7 +205,8 @@ export default function TelaChat() {
         <View style={styles.areaLista}>
           <FlatList
             ref={listaRef}
-            data={entradasComDivisor}
+            inverted
+            data={entradasInvertidas}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) =>
               item.tipo === 'divisor' ? (
@@ -255,8 +243,14 @@ export default function TelaChat() {
             viewabilityConfig={configuracaoVisibilidade}
             onScrollToIndexFailed={aoFalharScrollParaIndice}
             ListEmptyComponent={
+              // FlatList `inverted` espelha (scaleY) a lista inteira -- todo
+              // item normal já ganha o contra-espelhamento automático da
+              // própria FlatList, mas ListEmptyComponent é a exceção
+              // documentada que NÃO recebe isso sozinho (senão o texto
+              // apareceria de cabeça pra baixo). Por isso o scaleY manual
+              // aqui, só neste caso.
               !carregando ? (
-                <View style={styles.vazio}>
+                <View style={[styles.vazio, styles.vazioInvertido]}>
                   <Text style={styles.vazioTexto}>
                     Nenhuma solicitação ou mensagem ainda. Toque em + pra pedir algo, ou escreva abaixo.
                   </Text>
@@ -301,6 +295,7 @@ const styles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: '#f8fafc' },
   areaLista: { flex: 1 },
   vazio: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  vazioInvertido: { transform: [{ scaleY: -1 }] },
   vazioTexto: { color: '#94a3b8', textAlign: 'center', fontSize: 14 },
   divisor: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10 },
   divisorLinha: { flex: 1, height: 1, backgroundColor: '#cbd5e1' },
