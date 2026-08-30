@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons'
 import * as DocumentPicker from 'expo-document-picker'
 import {
   RecordingPresets,
@@ -8,7 +9,8 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio'
-import { useRef, useState } from 'react'
+import * as Location from 'expo-location'
+import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useAuth } from '../../auth/useAuth'
 import { escolherImagemChat } from '../../camera/escolherImagemChat'
@@ -81,6 +83,23 @@ export function BarraEntrada({
   // (achado real, visto no log). Ignora toques repetidos até o atual
   // terminar, em vez de empilhar.
   const escolhendoAnexo = useRef(false)
+  // watchPositionAsync (não uma leitura só) -- pedido do usuário: enquanto
+  // a localização ainda não foi enviada, segue ouvindo o GPS e substitui
+  // lat/lng/precisão sozinho a cada leitura melhor, dando tempo do
+  // aparelho melhorar o fix antes de mandar.
+  const assinaturaLocalizacao = useRef<Location.LocationSubscription | null>(null)
+
+  function pararObservarLocalizacao() {
+    assinaturaLocalizacao.current?.remove()
+    assinaturaLocalizacao.current = null
+  }
+
+  function limparAnexo() {
+    pararObservarLocalizacao()
+    setAnexo(null)
+  }
+
+  useEffect(() => pararObservarLocalizacao, [])
 
   async function aoEscolherAnexo(fonte: 'camera' | 'galeria' | 'documento') {
     if (escolhendoAnexo.current) return
@@ -91,6 +110,7 @@ export function BarraEntrada({
         const resultado = await DocumentPicker.getDocumentAsync({ type: '*/*' })
         if (resultado.canceled || !resultado.assets[0]) return
         const doc = resultado.assets[0]
+        pararObservarLocalizacao()
         setAnexo({
           tipo: 'arquivo',
           uriLocal: doc.uri,
@@ -123,6 +143,7 @@ export function BarraEntrada({
       return
     }
     const midia = resultado.midia
+    pararObservarLocalizacao()
     setAnexo({
       tipo: 'arquivo',
       uriLocal: midia.uri,
@@ -136,6 +157,10 @@ export function BarraEntrada({
   async function aoEscolherLocalizacao() {
     setErro(null)
     setBuscandoLocalizacao(true)
+    // 1ª leitura via obterLocalizacaoAtual() -- já cuida de permissão e
+    // dos tempos-limite contra o diálogo do sistema travar (ver
+    // lib/localizacao.ts). Só depois liga o watch pra ir refinando
+    // sozinho enquanto a mensagem ainda não foi enviada.
     const local = await obterLocalizacaoAtual()
     setBuscandoLocalizacao(false)
     if (!local) {
@@ -143,6 +168,28 @@ export function BarraEntrada({
       return
     }
     setAnexo({ tipo: 'localizacao', latitude: local.latitude, longitude: local.longitude, precisao: local.precisao })
+
+    pararObservarLocalizacao()
+    try {
+      assinaturaLocalizacao.current = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 1 },
+        (posicao) => {
+          setAnexo((atual) =>
+            atual?.tipo === 'localizacao'
+              ? {
+                  tipo: 'localizacao',
+                  latitude: posicao.coords.latitude,
+                  longitude: posicao.coords.longitude,
+                  precisao: posicao.coords.accuracy,
+                }
+              : atual,
+          )
+        },
+      )
+    } catch {
+      // sem watch contínuo -- a 1ª leitura já virou anexo, só não
+      // refina mais sozinha. Não é motivo pra mostrar erro nenhum.
+    }
   }
 
   async function iniciarGravacao() {
@@ -166,11 +213,20 @@ export function BarraEntrada({
     await gravador.stop()
     const uri = gravador.uri
     if (!uri || duracaoSegundos < 1) return // gravação vazia/cancelada rápido demais -- não vira anexo
+    pararObservarLocalizacao()
     setAnexo({
       tipo: 'arquivo',
       uriLocal: uri,
       nomeArquivo: `audio-${Date.now()}.m4a`,
-      mime: 'audio/m4a',
+      // audio/mp4 (não audio/m4a -- não é um mimetype IANA de verdade,
+      // mesmo sendo o que a extensão ".m4a" sugere) -- achado real: o
+      // áudio nunca tocava e a bolha mostrava 0 segundos de duração
+      // (useAudioPlayerStatus().duration fica 0 quando o player nunca
+      // termina de carregar). AVPlayer no iOS não reconhece "audio/m4a"
+      // no Content-Type devolvido pelo servidor e recusa a carregar,
+      // mesmo os bytes (AAC dentro de MP4) sendo válidos -- audio/mp4 é
+      // o tipo correto/reconhecido pro mesmo arquivo.
+      mime: 'audio/mp4',
       categoria: 'AUDIO',
       duracaoSegundos,
     })
@@ -205,7 +261,7 @@ export function BarraEntrada({
     })
     runSync()
     setTexto('')
-    setAnexo(null)
+    limparAnexo()
     setEnviando(false)
     aoLimparResposta?.()
     onConcluido()
@@ -257,7 +313,7 @@ export function BarraEntrada({
               📄 {anexo.nomeArquivo}
             </Text>
           )}
-          <Pressable onPress={() => setAnexo(null)} hitSlop={8}>
+          <Pressable onPress={limparAnexo} hitSlop={8}>
             <Text style={styles.previaFechar}>✕</Text>
           </Pressable>
         </View>
@@ -292,7 +348,7 @@ export function BarraEntrada({
             onPress={gravando ? pararGravacao : iniciarGravacao}
             style={[styles.botaoEnviar, gravando && styles.botaoGravando]}
           >
-            <Text style={styles.iconeEnviar}>{gravando ? '⏹' : '🎤'}</Text>
+            <Ionicons name={gravando ? 'stop' : 'mic'} size={22} color="#fff" />
           </Pressable>
         ) : (
           <Pressable
@@ -300,7 +356,7 @@ export function BarraEntrada({
             disabled={enviando}
             style={[styles.botaoEnviar, enviando && styles.botaoDesabilitado]}
           >
-            {enviando ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.iconeEnviar}>➤</Text>}
+            {enviando ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={19} color="#fff" />}
           </Pressable>
         )}
       </View>
@@ -407,5 +463,4 @@ const styles = StyleSheet.create({
   },
   botaoGravando: { backgroundColor: '#dc2626' },
   botaoDesabilitado: { backgroundColor: '#cbd5e1' },
-  iconeEnviar: { color: '#fff', fontSize: 19, fontWeight: '700' },
 })

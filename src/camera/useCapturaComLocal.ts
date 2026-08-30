@@ -94,7 +94,21 @@ export function useCapturaComLocal() {
       promessa.then((local) => aoLocalizar(uri, local))
     }
 
-    return { uriLocal: uri, capturadaEm }
+    // localAtual (não só o callback aoLocalizar) -- se o GPS já tinha
+    // resolvido a tempo de aparecer na faixa AO VIVO da câmera (comum, é
+    // a mesma busca), a foto já nasce com local preenchido, sem depender
+    // do callback assíncrono rodar antes de alguém abrir a prévia. Achado
+    // real: usuário via a localização certa no visor, mas "não
+    // disponível" na revisão pós-captura -- o retorno aqui nunca levava
+    // o que já estava disponível, só o callback levava (e só quando
+    // rodava a tempo).
+    return {
+      uriLocal: uri,
+      capturadaEm,
+      latitude: localAtual?.latitude,
+      longitude: localAtual?.longitude,
+      localizacaoRotulo: localAtual?.rotulo ?? undefined,
+    }
   }
 
   return { capturando, capturar }

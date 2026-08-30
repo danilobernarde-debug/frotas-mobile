@@ -38,9 +38,11 @@ export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; 
           <Text style={[styles.documentoNome, minhaPropria && styles.documentoNomeProprio]}>
             Ver localização no mapa
           </Text>
+          {/* Só coordenada aqui -- precisão é útil na hora de mandar (pra
+              decidir se espera o GPS melhorar), não depois de enviada
+              (pedido do usuário). */}
           <Text style={[styles.documentoTamanho, minhaPropria && styles.documentoTamanhoProprio]}>
             {mensagem.anexo_latitude.toFixed(6)}, {mensagem.anexo_longitude.toFixed(6)}
-            {mensagem.anexo_precisao != null && ` · precisão ~${Math.round(mensagem.anexo_precisao)} m`}
           </Text>
         </View>
       </Pressable>

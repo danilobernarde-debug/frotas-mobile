@@ -111,10 +111,12 @@ export function BolhaMensagem({
                 : `📄 ${anexoLocal.nomeArquivo}`}
           </Text>
         )}
+        {/* Só coordenada aqui -- precisão é só enquanto ainda dá pra
+            esperar o GPS melhorar, antes de tocar Enviar (pedido do
+            usuário); esta bolha já é depois disso. */}
         {localizacaoLocal && (
           <Text style={styles.textoProprio}>
             📍 {localizacaoLocal.latitude.toFixed(6)}, {localizacaoLocal.longitude.toFixed(6)}
-            {localizacaoLocal.precisao != null && ` · precisão ~${Math.round(localizacaoLocal.precisao)} m`}
           </Text>
         )}
         {item.payload.texto && <Text style={styles.textoProprio}>{item.payload.texto}</Text>}
