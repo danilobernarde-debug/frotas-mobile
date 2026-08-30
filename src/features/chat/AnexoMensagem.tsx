@@ -170,8 +170,13 @@ function PlayerAudio({
   // repassado igual aos outros elementos internos desta bolha (ver
   // comentário grande no topo do arquivo) pra não perder o menu de
   // Responder/Compartilhar ao segurar bem em cima do botão.
+  // status.playbackRate começa em 0 (não 1) antes do player terminar de
+  // carregar -- achado real: o botão mostrava "0x" assim que a bolha
+  // aparecia, antes de qualquer toque. || 1 cobre esse estado inicial.
+  const velocidadeAtual = status.playbackRate || 1
+
   function alternarVelocidade() {
-    const proxima = VELOCIDADES_AUDIO[(VELOCIDADES_AUDIO.indexOf(status.playbackRate) + 1) % VELOCIDADES_AUDIO.length]
+    const proxima = VELOCIDADES_AUDIO[(VELOCIDADES_AUDIO.indexOf(velocidadeAtual) + 1) % VELOCIDADES_AUDIO.length]
     player.setPlaybackRate(proxima)
   }
 
@@ -198,7 +203,7 @@ function PlayerAudio({
       </Text>
       <Pressable onPress={alternarVelocidade} onLongPress={aoLongPress} hitSlop={6}>
         <Text style={[styles.audioVelocidade, minhaPropria && styles.audioVelocidadeProprio]}>
-          {status.playbackRate}x
+          {velocidadeAtual}x
         </Text>
       </Pressable>
     </Pressable>
