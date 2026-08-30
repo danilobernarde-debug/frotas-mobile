@@ -35,3 +35,20 @@ export function diaRelativo(iso: string | null | undefined): string {
   if (mesmoDia(d, ontem)) return 'Ontem'
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
 }
+
+/** 2_400_000 -> '2,3 MB' -- anexo de mensagem (chat), tamanho do arquivo
+ *  no cartão de documento. Espelha frotas-web/src/lib/formato.ts. */
+export function tamanhoArquivo(bytes: number | null | undefined): string {
+  if (bytes == null) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** 65 -> '1:05' -- tempo de gravação/reprodução de áudio. */
+export function duracaoAudio(segundos: number | null | undefined): string {
+  if (segundos == null || Number.isNaN(segundos)) return '0:00'
+  const m = Math.floor(segundos / 60)
+  const s = Math.floor(segundos % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
+}

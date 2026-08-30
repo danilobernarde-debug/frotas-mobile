@@ -1,6 +1,8 @@
-import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native'
+import { Image, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native'
 import { useAuth } from '../../auth/useAuth'
 import { hora } from '../../lib/formato'
+import { AnexoMensagem } from './AnexoMensagem'
+import { previaMensagem } from './textoMensagem'
 import type { EntradaChat, RespondendoA } from './types'
 
 /**
@@ -52,7 +54,7 @@ export function BolhaMensagem({
           onLongPress={
             aoResponder &&
             ((evento) =>
-              aoResponder({ tipo: 'mensagem', id: m.id, titulo: nomeAutor, texto: m.texto }, evento))
+              aoResponder({ tipo: 'mensagem', id: m.id, titulo: nomeAutor, texto: previaMensagem(m) }, evento))
           }
           style={[
             styles.bolha,
@@ -76,7 +78,10 @@ export function BolhaMensagem({
               </Text>
             </Pressable>
           )}
-          <Text style={minhaPropria ? styles.textoProprio : styles.textoOutro}>{m.texto}</Text>
+          <AnexoMensagem mensagem={m} minhaPropria={minhaPropria} />
+          {m.texto && (
+            <Text style={minhaPropria ? styles.textoProprio : styles.textoOutro}>{m.texto}</Text>
+          )}
           <Text style={minhaPropria ? styles.horarioProprio : styles.horarioOutro}>
             {hora(entrada.criadoEm)}
           </Text>
@@ -89,10 +94,19 @@ export function BolhaMensagem({
   // fila -- uma resposta da gestão só existe depois de sincronizar e vir
   // do servidor, nunca aparece como item local.
   const item = entrada.item
+  const anexoLocal = item.payload.anexo
   return (
     <View style={[styles.linha, styles.linhaDireita]}>
       <View style={[styles.bolha, styles.bolhaPropria, styles.bolhaLocal]}>
-        <Text style={styles.textoProprio}>{item.payload.texto}</Text>
+        {anexoLocal?.categoria === 'IMAGEM' && (
+          <Image source={{ uri: anexoLocal.uriLocal }} style={styles.imagemLocal} resizeMode="cover" />
+        )}
+        {anexoLocal && anexoLocal.categoria !== 'IMAGEM' && (
+          <Text style={styles.textoProprio}>
+            {anexoLocal.categoria === 'AUDIO' ? '🎤 Áudio' : `📄 ${anexoLocal.nomeArquivo}`}
+          </Text>
+        )}
+        {item.payload.texto && <Text style={styles.textoProprio}>{item.payload.texto}</Text>}
         {item.permanente && item.erroMsg && <Text style={styles.erroMsg}>{item.erroMsg}</Text>}
         <Text style={styles.status}>
           {hora(entrada.criadoEm)} ·{' '}
@@ -114,6 +128,7 @@ const styles = StyleSheet.create({
   autor: { fontSize: 11, fontWeight: '700', color: '#0f766e', marginBottom: 2 },
   autorEsquerda: { marginLeft: 4 },
   bolha: { borderRadius: 14, paddingVertical: 8, paddingHorizontal: 12 },
+  imagemLocal: { width: 200, height: 200, borderRadius: 10, marginBottom: 4 },
   bolhaOutro: { backgroundColor: '#e2e8f0', borderBottomLeftRadius: 4 },
   bolhaPropria: { backgroundColor: '#0d9488', borderBottomRightRadius: 4 },
   bolhaLocal: { opacity: 0.7 },

@@ -95,15 +95,23 @@ export interface RespostaChecklist {
   observacao: string | null
 }
 
+export type CategoriaAnexoMensagem = 'IMAGEM' | 'AUDIO' | 'DOCUMENTO'
+
 export interface Mensagem {
   id: number
   encarregado_id: string | null
   autor_id: string | null
   regional_id: number | null
-  texto: string
+  texto: string | null
   origem_local_id: string | null
   respondendo_a: number | null
   respondendo_aprovacao_id: number | null
   criado_em: string
   autor?: Pick<Perfil, 'id' | 'nome'> | null
+  anexo_caminho: string | null
+  anexo_tipo: CategoriaAnexoMensagem | null
+  anexo_mime: string | null
+  anexo_nome: string | null
+  anexo_tamanho: number | null
+  anexo_duracao_segundos: number | null
 }

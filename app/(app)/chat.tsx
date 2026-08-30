@@ -22,6 +22,7 @@ import { MenuAcoesMensagem } from '../../src/features/chat/MenuAcoesMensagem'
 import type { EntradaChat, RespondendoA } from '../../src/features/chat/types'
 import { useDivisorNaoLidas } from '../../src/features/chat/useDivisorNaoLidas'
 import { useMinhasSolicitacoes } from '../../src/features/chat/useMinhasSolicitacoes'
+import { previaMensagem } from '../../src/features/chat/textoMensagem'
 import { diaRelativo } from '../../src/lib/formato'
 import type { Aprovacao, CategoriaSolicitacao, Mensagem } from '../../src/lib/tipos'
 import { useNetworkStatus } from '../../src/net/useNetworkStatus'
@@ -71,7 +72,7 @@ export default function TelaChat() {
       const citada = mensagensPorId.get(m.respondendo_a)
       if (!citada) return null
       const nomeCitado = citada.autor_id === perfil?.id ? (perfil?.nome ?? 'Você') : (citada.autor?.nome ?? 'Gestão de frotas')
-      return { titulo: nomeCitado, texto: citada.texto, alvoId: `servidor-msg-${citada.id}` }
+      return { titulo: nomeCitado, texto: previaMensagem(citada), alvoId: `servidor-msg-${citada.id}` }
     }
     if (m.respondendo_aprovacao_id != null) {
       const citada = aprovacoesPorId.get(m.respondendo_aprovacao_id)

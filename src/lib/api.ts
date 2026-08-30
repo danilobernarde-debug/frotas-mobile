@@ -4,6 +4,12 @@ export function urlAnexo(alvo: 'aprovacoes' | 'checklists', anexoId: number): st
   return `${APP_URL}/api/mobile/anexos/${anexoId}?alvo=${alvo}`
 }
 
+/** `mensagemId` é o id da própria frota_mensagens, não de uma linha de
+ *  anexo separada -- não existe uma pra chat (ver migration 0030). */
+export function urlAnexoMensagem(mensagemId: number): string {
+  return `${APP_URL}/api/mobile/anexo-mensagem/${mensagemId}`
+}
+
 export interface AnexoEnviado {
   id: number
   caminho: string
@@ -65,4 +71,46 @@ export async function enviarAnexo(params: {
     throw new Error(corpo.erro ?? `Falha ao enviar anexo (status ${resposta.status}).`)
   }
   return corpo.anexo as AnexoEnviado
+}
+
+export interface AnexoMensagemEnviado {
+  caminho: string
+  mime: string
+  tamanho: number
+}
+
+/**
+ * Sobe o anexo de UMA mensagem do chat (imagem/áudio/documento) --
+ * diferente de enviarAnexo (fotos de aprovação/checklist), esta rota SÓ
+ * sobe pro Drive, sem inserir nada no banco: frota_mensagens não tem
+ * UPDATE (mensagem enviada é definitiva), então o handler do outbox
+ * (outbox/handlers/mensagem.ts) precisa do resultado deste upload ANTES
+ * de inserir a linha da mensagem, já com anexo_caminho preenchido.
+ */
+export async function enviarAnexoMensagem(params: {
+  uriArquivo: string
+  nomeArquivo: string
+  mime: string
+  categoria: 'IMAGEM' | 'AUDIO' | 'DOCUMENTO'
+  tokenAcesso: string
+}): Promise<AnexoMensagemEnviado> {
+  const form = new FormData()
+  form.append('categoria', params.categoria)
+  form.append('arquivo', {
+    uri: params.uriArquivo,
+    name: params.nomeArquivo,
+    type: params.mime,
+  } as unknown as Blob)
+
+  const resposta = await fetch(`${APP_URL}/api/mobile/anexo-mensagem`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${params.tokenAcesso}` },
+    body: form,
+  })
+
+  const corpo = await resposta.json()
+  if (!resposta.ok) {
+    throw new Error(corpo.erro ?? `Falha ao enviar anexo (status ${resposta.status}).`)
+  }
+  return corpo.anexo as AnexoMensagemEnviado
 }

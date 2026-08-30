@@ -50,6 +50,12 @@
         {
           "locationWhenInUsePermission": "Usado para registrar onde a foto do abastecimento foi tirada."
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Usado para gravar um áudio e mandar na conversa com a gestão de frotas."
+        }
       ]
     ]
   }

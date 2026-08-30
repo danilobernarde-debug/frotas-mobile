@@ -1,18 +1,37 @@
+import * as DocumentPicker from 'expo-document-picker'
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from 'expo-audio'
 import { useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import type { CategoriaSolicitacao } from '../../lib/tipos'
-import { TIPO_MENSAGEM, type MensagemPayload } from '../../outbox/handlers/mensagem'
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { escolherImagemChat } from '../../camera/escolherImagemChat'
+import { duracaoAudio } from '../../lib/formato'
+import type { CategoriaAnexoMensagem, CategoriaSolicitacao } from '../../lib/tipos'
+import { TIPO_MENSAGEM, type AnexoMensagemPayload, type MensagemPayload } from '../../outbox/handlers/mensagem'
 import { enfileirar } from '../../outbox/outbox'
 import { runSync } from '../../outbox/syncEngine'
 import { MenuAnexo } from './MenuAnexo'
+import { MenuAnexoArquivo } from './MenuAnexoArquivo'
 import type { RespondendoA } from './types'
 
+interface AnexoEscolhido {
+  uriLocal: string
+  nomeArquivo: string
+  mime: string
+  categoria: CategoriaAnexoMensagem
+  duracaoSegundos?: number
+}
+
 /**
- * Rodapé estilo WhatsApp: "+" à esquerda (abre o menu de tipo de
- * solicitação -- que agora navega pra tela cheia de formulário, não
- * inicia mais um roteiro guiado dentro do próprio chat), campo de texto
- * no meio, ícone de enviar à direita. O campo é sempre mensagem livre pra
- * gestão de frotas -- digitar e tocar em ➤ enfileira e limpa.
+ * Rodapé estilo WhatsApp: "+" abre o tipo de solicitação (MenuAnexo, apesar
+ * do nome -- não é anexo de arquivo, ver comentário lá), 📎 (MenuAnexoArquivo)
+ * abre câmera/galeria/documento pro chat de verdade, campo de texto no
+ * meio, enviar/microfone à direita (alterna conforme tem conteúdo ou não,
+ * igual BarraEntrada do painel web faz com habilitaEnviar).
  */
 export function BarraEntrada({
   onNovaCategoria,
@@ -27,24 +46,93 @@ export function BarraEntrada({
 }) {
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [anexo, setAnexo] = useState<AnexoEscolhido | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const gravador = useAudioRecorder(RecordingPresets.HIGH_QUALITY)
+  const estadoGravador = useAudioRecorderState(gravador, 200)
+  const gravando = estadoGravador.isRecording
+
+  async function aoEscolherAnexo(fonte: 'camera' | 'galeria' | 'documento') {
+    setErro(null)
+    if (fonte === 'documento') {
+      const resultado = await DocumentPicker.getDocumentAsync({ type: '*/*' })
+      if (resultado.canceled || !resultado.assets[0]) return
+      const doc = resultado.assets[0]
+      setAnexo({
+        uriLocal: doc.uri,
+        nomeArquivo: doc.name,
+        mime: doc.mimeType || 'application/octet-stream',
+        categoria: 'DOCUMENTO',
+      })
+      return
+    }
+    const imagem = await escolherImagemChat(fonte)
+    if (!imagem) return
+    setAnexo({ uriLocal: imagem.uri, nomeArquivo: imagem.nome, mime: 'image/jpeg', categoria: 'IMAGEM' })
+  }
+
+  async function iniciarGravacao() {
+    setErro(null)
+    const permissao = await requestRecordingPermissionsAsync()
+    if (!permissao.granted) {
+      setErro('Sem permissão de microfone -- confira nas configurações do aparelho.')
+      return
+    }
+    try {
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true })
+      await gravador.prepareToRecordAsync()
+      gravador.record()
+    } catch {
+      setErro('Não consegui começar a gravação -- tenta de novo.')
+    }
+  }
+
+  async function pararGravacao() {
+    const duracaoSegundos = Math.round(estadoGravador.durationMillis / 1000)
+    await gravador.stop()
+    const uri = gravador.uri
+    if (!uri || duracaoSegundos < 1) return // gravação vazia/cancelada rápido demais -- não vira anexo
+    setAnexo({
+      uriLocal: uri,
+      nomeArquivo: `audio-${Date.now()}.m4a`,
+      mime: 'audio/m4a',
+      categoria: 'AUDIO',
+      duracaoSegundos,
+    })
+  }
 
   async function aoTocarEnviar() {
     const digitado = texto.trim()
-    if (!digitado) return
+    if (!digitado && !anexo) return
     setEnviando(true)
+
+    const anexoPayload: AnexoMensagemPayload | undefined = anexo
+      ? {
+          uriLocal: anexo.uriLocal,
+          nomeArquivo: anexo.nomeArquivo,
+          mime: anexo.mime,
+          categoria: anexo.categoria,
+          duracaoSegundos: anexo.duracaoSegundos,
+        }
+      : undefined
+
     await enfileirar<MensagemPayload>(TIPO_MENSAGEM, {
-      texto: digitado,
+      texto: digitado || undefined,
+      anexo: anexoPayload,
       respondendoA: respondendoA?.tipo === 'mensagem' ? respondendoA.id : undefined,
       respondendoAprovacaoId: respondendoA?.tipo === 'solicitacao' ? respondendoA.id : undefined,
     })
     runSync()
     setTexto('')
+    setAnexo(null)
     setEnviando(false)
     aoLimparResposta?.()
     onConcluido()
   }
 
-  const habilitaEnviar = texto.trim().length > 0
+  const temConteudo = texto.trim().length > 0 || anexo !== null
+  const mostrarMicrofone = !temConteudo || gravando
 
   return (
     <View>
@@ -63,14 +151,34 @@ export function BarraEntrada({
         </View>
       )}
 
+      {erro && <Text style={styles.erro}>{erro}</Text>}
+
+      {anexo && (
+        <View style={styles.previaBarra}>
+          {anexo.categoria === 'IMAGEM' ? (
+            <Image source={{ uri: anexo.uriLocal }} style={styles.previaImagem} />
+          ) : (
+            <Text style={styles.previaTexto} numberOfLines={1}>
+              {anexo.categoria === 'AUDIO'
+                ? `🎤 Áudio · ${duracaoAudio(anexo.duracaoSegundos)}`
+                : `📄 ${anexo.nomeArquivo}`}
+            </Text>
+          )}
+          <Pressable onPress={() => setAnexo(null)} hitSlop={8}>
+            <Text style={styles.previaFechar}>✕</Text>
+          </Pressable>
+        </View>
+      )}
+
       <View style={styles.barra}>
-        <MenuAnexo onEscolher={onNovaCategoria} />
+        <MenuAnexo onEscolher={onNovaCategoria} desabilitado={gravando} />
+        <MenuAnexoArquivo onEscolher={aoEscolherAnexo} desabilitado={gravando} />
 
         <TextInput
           style={styles.campo}
           value={texto}
           onChangeText={setTexto}
-          placeholder="Escreva uma mensagem…"
+          placeholder={gravando ? `Gravando… ${duracaoAudio(Math.round(estadoGravador.durationMillis / 1000))}` : 'Escreva uma mensagem…'}
           placeholderTextColor="#94a3b8"
           // multiline: o campo cresce junto com o texto (até maxHeight, depois
           // rola por dentro) -- igual WhatsApp. returnKeyType="send" +
@@ -79,15 +187,25 @@ export function BarraEntrada({
           // WhatsApp faz. Enter aqui só quebra linha; enviar é só pelo ➤.
           multiline
           returnKeyType="default"
+          editable={!gravando}
         />
 
-        <Pressable
-          onPress={aoTocarEnviar}
-          disabled={!habilitaEnviar || enviando}
-          style={[styles.botaoEnviar, (!habilitaEnviar || enviando) && styles.botaoDesabilitado]}
-        >
-          {enviando ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.iconeEnviar}>➤</Text>}
-        </Pressable>
+        {mostrarMicrofone ? (
+          <Pressable
+            onPress={gravando ? pararGravacao : iniciarGravacao}
+            style={[styles.botaoEnviar, gravando && styles.botaoGravando]}
+          >
+            <Text style={styles.iconeEnviar}>{gravando ? '⏹' : '🎤'}</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={aoTocarEnviar}
+            disabled={enviando}
+            style={[styles.botaoEnviar, enviando && styles.botaoDesabilitado]}
+          >
+            {enviando ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.iconeEnviar}>➤</Text>}
+          </Pressable>
+        )}
       </View>
     </View>
   )
@@ -109,14 +227,28 @@ const styles = StyleSheet.create({
   respondendoAutor: { fontSize: 12, fontWeight: '700', color: '#0f766e' },
   respondendoTexto: { fontSize: 12, color: '#64748b' },
   respondendoFechar: { fontSize: 16, color: '#94a3b8', paddingHorizontal: 4 },
+  erro: { fontSize: 12, fontWeight: '600', color: '#dc2626', paddingHorizontal: 12, paddingTop: 6 },
+  previaBarra: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 10,
+    marginTop: 8,
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+  },
+  previaImagem: { width: 40, height: 40, borderRadius: 6 },
+  previaTexto: { flex: 1, fontSize: 13, color: '#334155' },
+  previaFechar: { fontSize: 16, color: '#94a3b8', paddingHorizontal: 6 },
   barra: {
     flexDirection: 'row',
     // flex-end (não 'center'): conforme o campo cresce com o texto, o "+"
     // e o botão de enviar ficam ancorados embaixo, igual WhatsApp -- com
     // 'center' os dois ficariam flutuando no meio da altura toda.
     alignItems: 'flex-end',
-    gap: 8,
-    paddingHorizontal: 10,
+    gap: 4,
+    paddingHorizontal: 6,
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
@@ -146,6 +278,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  botaoGravando: { backgroundColor: '#dc2626' },
   botaoDesabilitado: { backgroundColor: '#cbd5e1' },
   iconeEnviar: { color: '#fff', fontSize: 19, fontWeight: '700' },
 })
