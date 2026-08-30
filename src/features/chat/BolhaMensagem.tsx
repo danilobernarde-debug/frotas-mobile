@@ -1,6 +1,7 @@
 import { Image, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native'
 import { useAuth } from '../../auth/useAuth'
 import { hora } from '../../lib/formato'
+import type { Mensagem } from '../../lib/tipos'
 import { AnexoMensagem } from './AnexoMensagem'
 import { previaMensagem } from './textoMensagem'
 import type { EntradaChat, RespondendoA } from './types'
@@ -35,7 +36,7 @@ export function BolhaMensagem({
 }: {
   entrada: EntradaChat & { tipo: 'mensagem' }
   citacao?: { titulo: string; texto: string; alvoId: string }
-  aoResponder?: (r: RespondendoA, evento: GestureResponderEvent) => void
+  aoResponder?: (r: RespondendoA, evento: GestureResponderEvent, mensagem?: Mensagem) => void
   aoIrParaOriginal?: (alvoId: string) => void
   destacada?: boolean
 }) {
@@ -54,7 +55,7 @@ export function BolhaMensagem({
           onLongPress={
             aoResponder &&
             ((evento) =>
-              aoResponder({ tipo: 'mensagem', id: m.id, titulo: nomeAutor, texto: previaMensagem(m) }, evento))
+              aoResponder({ tipo: 'mensagem', id: m.id, titulo: nomeAutor, texto: previaMensagem(m) }, evento, m))
           }
           style={[
             styles.bolha,

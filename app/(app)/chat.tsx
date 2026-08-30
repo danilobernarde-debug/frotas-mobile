@@ -1,7 +1,13 @@
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Alert,
   Animated,
+  // Clipboard: extraído do núcleo do RN, mas ainda funciona (só com aviso
+  // de depreciação) -- evita somar mais uma dependência nova (expo-clipboard)
+  // logo depois de um problema real de instalação (@expo/vector-icons) nesta
+  // mesma sessão, enquanto isso não é confirmado resolvido.
+  Clipboard,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -17,17 +23,25 @@ import { useAuth } from '../../src/auth/useAuth'
 import { BarraEntrada } from '../../src/features/chat/BarraEntrada'
 import { BolhaMensagem } from '../../src/features/chat/BolhaMensagem'
 import { BolhaSolicitacao, ROTULO_CATEGORIA } from '../../src/features/chat/BolhaSolicitacao'
+import { compartilharAnexo } from '../../src/features/chat/compartilharAnexo'
 import { inserirDivisoresData } from '../../src/features/chat/divisoresData'
-import { MenuAcoesMensagem } from '../../src/features/chat/MenuAcoesMensagem'
+import { MenuAcoesMensagem, type ItemMenuAcao } from '../../src/features/chat/MenuAcoesMensagem'
 import type { EntradaChat, RespondendoA } from '../../src/features/chat/types'
 import { useDivisorNaoLidas } from '../../src/features/chat/useDivisorNaoLidas'
 import { useMinhasSolicitacoes } from '../../src/features/chat/useMinhasSolicitacoes'
 import { previaMensagem } from '../../src/features/chat/textoMensagem'
+import { urlAnexoMensagem } from '../../src/lib/api'
 import { diaRelativo } from '../../src/lib/formato'
 import type { Aprovacao, CategoriaSolicitacao, Mensagem } from '../../src/lib/tipos'
 import { useNetworkStatus } from '../../src/net/useNetworkStatus'
 import { useSyncStatus } from '../../src/outbox/useSyncStatus'
 import { CabecalhoApp } from '../../src/ui/CabecalhoApp'
+
+const NOMES_ANEXO: Record<'IMAGEM' | 'VIDEO' | 'AUDIO', string> = {
+  IMAGEM: 'foto.jpg',
+  VIDEO: 'video.mp4',
+  AUDIO: 'audio.m4a',
+}
 
 /** Quanto tempo o selo de data fica visível depois que a rolagem para
  *  (ms) -- mesmo espírito do WhatsApp: aparece enquanto rola, some
@@ -36,7 +50,7 @@ const TEMPO_VISIVEL_SELO_DATA_MS = 1200
 
 export default function TelaChat() {
   const router = useRouter()
-  const { perfil } = useAuth()
+  const { perfil, sessao } = useAuth()
   const { entradas, carregando, recarregar } = useMinhasSolicitacoes()
   const entradasComDivisor = useDivisorNaoLidas(inserirDivisoresData(entradas))
   // FlatList invertida (index 0 = mais recente, embaixo na tela) -- é o
@@ -54,9 +68,11 @@ export default function TelaChat() {
   // Menu suspenso estilo WhatsApp aberto por toque longo -- guarda o alvo
   // (mensagem ou solicitação) e o ponto da tela onde o dedo tocou, pra
   // MenuAcoesMensagem se posicionar perto dali.
-  const [menuAberto, setMenuAberto] = useState<{ alvo: RespondendoA; ponto: { x: number; y: number } } | null>(
-    null,
-  )
+  const [menuAberto, setMenuAberto] = useState<{
+    alvo: RespondendoA
+    ponto: { x: number; y: number }
+    mensagem?: Mensagem
+  } | null>(null)
   // Item (id de EntradaChat) que deve piscar um destaque agora, depois de
   // um toque em "ir pra mensagem original" -- some sozinho.
   const [destacado, setDestacado] = useState<string | null>(null)
@@ -122,9 +138,42 @@ export default function TelaChat() {
   /** Toque longo numa bolha não marca a resposta direto -- abre o menu
    *  suspenso (estilo WhatsApp) perto do ponto tocado; quem confirma
    *  "Responder" ali é que chama setRespondendoA. */
-  function aoTocarLongo(alvo: RespondendoA, evento: GestureResponderEvent) {
+  function aoTocarLongo(alvo: RespondendoA, evento: GestureResponderEvent, mensagem?: Mensagem) {
     const { pageX, pageY } = evento.nativeEvent
-    setMenuAberto({ alvo, ponto: { x: pageX, y: pageY } })
+    setMenuAberto({ alvo, ponto: { x: pageX, y: pageY }, mensagem })
+  }
+
+  /** Compartilhar/Copiar só fazem sentido pra mensagem já sincronizada com
+   *  anexo (aoResponder só passa `mensagem` nesse caso -- ver BolhaMensagem)
+   *  -- estilo WhatsApp: segurar uma foto/vídeo/áudio/documento oferece
+   *  compartilhar com outro app, além de responder. */
+  function itensDoMenu(alvo: RespondendoA, mensagem?: Mensagem): ItemMenuAcao[] {
+    const itens: ItemMenuAcao[] = [{ rotulo: '↩ Responder', aoTocar: () => setRespondendoA(alvo) }]
+
+    if (mensagem?.texto) {
+      itens.push({
+        rotulo: '📋 Copiar',
+        aoTocar: () => Clipboard.setString(mensagem.texto ?? ''),
+      })
+    }
+
+    const tipo = mensagem?.anexo_tipo
+    if (mensagem && tipo && tipo !== 'LOCALIZACAO' && mensagem.anexo_caminho) {
+      itens.push({
+        rotulo: '📤 Compartilhar',
+        aoTocar: () => {
+          const token = sessao?.access_token
+          if (!token) return
+          const url = `${urlAnexoMensagem(mensagem.id)}?token=${encodeURIComponent(token)}`
+          const nome = tipo === 'DOCUMENTO' ? (mensagem.anexo_nome ?? 'documento') : NOMES_ANEXO[tipo]
+          compartilharAnexo(url, nome).catch(() =>
+            Alert.alert('Não consegui compartilhar', 'Tenta de novo em alguns segundos.'),
+          )
+        },
+      })
+    }
+
+    return itens
   }
 
   function destacar(alvoId: string) {
@@ -282,9 +331,7 @@ export default function TelaChat() {
       <MenuAcoesMensagem
         visivel={menuAberto !== null}
         ponto={menuAberto?.ponto ?? null}
-        itens={
-          menuAberto ? [{ rotulo: '↩ Responder', aoTocar: () => setRespondendoA(menuAberto.alvo) }] : []
-        }
+        itens={menuAberto ? itensDoMenu(menuAberto.alvo, menuAberto.mensagem) : []}
         onFechar={() => setMenuAberto(null)}
       />
     </SafeAreaView>
