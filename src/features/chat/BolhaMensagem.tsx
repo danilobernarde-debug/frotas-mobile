@@ -46,17 +46,17 @@ export function BolhaMensagem({
     const m = entrada.mensagem
     const minhaPropria = m.autor_id === perfil?.id
     const nomeAutor = minhaPropria ? (perfil?.nome ?? 'Você') : (m.autor?.nome ?? 'Gestão de frotas')
+    const aoSegurarBolha =
+      aoResponder &&
+      ((evento: GestureResponderEvent) =>
+        aoResponder({ tipo: 'mensagem', id: m.id, titulo: nomeAutor, texto: previaMensagem(m) }, evento, m))
     return (
       <View style={[styles.linha, minhaPropria ? styles.linhaDireita : styles.linhaEsquerda]}>
         {!minhaPropria && (
           <Text style={[styles.autor, styles.autorEsquerda]}>{nomeAutor}</Text>
         )}
         <Pressable
-          onLongPress={
-            aoResponder &&
-            ((evento) =>
-              aoResponder({ tipo: 'mensagem', id: m.id, titulo: nomeAutor, texto: previaMensagem(m) }, evento, m))
-          }
+          onLongPress={aoSegurarBolha}
           style={[
             styles.bolha,
             minhaPropria ? styles.bolhaPropria : styles.bolhaOutro,
@@ -79,7 +79,7 @@ export function BolhaMensagem({
               </Text>
             </Pressable>
           )}
-          <AnexoMensagem mensagem={m} minhaPropria={minhaPropria} />
+          <AnexoMensagem mensagem={m} minhaPropria={minhaPropria} aoLongPress={aoSegurarBolha} />
           {m.texto && (
             <Text style={minhaPropria ? styles.textoProprio : styles.textoOutro}>{m.texto}</Text>
           )}

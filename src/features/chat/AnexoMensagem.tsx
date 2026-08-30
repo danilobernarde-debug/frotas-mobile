@@ -1,7 +1,16 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio'
 import { useVideoPlayer, VideoView } from 'expo-video'
 import { useState } from 'react'
-import { Image, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import {
+  Image,
+  Linking,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type GestureResponderEvent,
+} from 'react-native'
 import { useAuth } from '../../auth/useAuth'
 import { FotoAmpliada } from '../../camera/FotoAmpliada'
 import { urlAnexoMensagem } from '../../lib/api'
@@ -13,8 +22,26 @@ import type { Mensagem } from '../../lib/tipos'
  * áudio tocam inline, documento abre no visualizador do sistema,
  * localização vira link pro mapa (não é arquivo, não precisa de token).
  * Espelha AnexoMensagem de frotas-web/src/app/(painel)/atividade/thread.tsx.
+ *
+ * `aoLongPress`: cada anexo (exceto vídeo, que usa o player nativo com
+ * `nativeControls`) tem seu próprio `Pressable` cobrindo toda a bolha --
+ * em React Native, o `Pressable` mais interno é quem vira o responder do
+ * gesto assim que o toque começa, então o `onLongPress` do `Pressable`
+ * *externo* (a bolha, em BolhaMensagem.tsx) nunca chegava a disparar
+ * nessas mensagens (achado confirmado testando ao vivo: segurar uma foto/
+ * áudio/documento sempre executava a ação de toque curto -- abrir a foto,
+ * tocar o áudio -- mesmo segurando bem mais que o tempo de toque longo).
+ * Por isso cada Pressable interno aqui recebe o mesmo handler também.
  */
-export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; minhaPropria: boolean }) {
+export function AnexoMensagem({
+  mensagem,
+  minhaPropria,
+  aoLongPress,
+}: {
+  mensagem: Mensagem
+  minhaPropria: boolean
+  aoLongPress?: (evento: GestureResponderEvent) => void
+}) {
   const { sessao } = useAuth()
   const token = sessao?.access_token
   // Só a imagem usa isto (abre em tela cheia ao tocar, estilo
@@ -31,6 +58,7 @@ export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; 
         onPress={() =>
           Linking.openURL(`https://www.google.com/maps?q=${mensagem.anexo_latitude},${mensagem.anexo_longitude}`)
         }
+        onLongPress={aoLongPress}
         style={[styles.documento, minhaPropria ? styles.documentoProprio : styles.documentoOutro]}
       >
         <Text style={styles.documentoIcone}>📍</Text>
@@ -62,7 +90,7 @@ export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; 
   if (mensagem.anexo_tipo === 'IMAGEM') {
     return (
       <>
-        <Pressable onPress={() => setAmpliada(true)}>
+        <Pressable onPress={() => setAmpliada(true)} onLongPress={aoLongPress}>
           <Image
             source={{ uri: url, headers: { Authorization: `Bearer ${token}` } }}
             style={styles.imagem}
@@ -83,12 +111,13 @@ export function AnexoMensagem({ mensagem, minhaPropria }: { mensagem: Mensagem; 
   }
 
   if (mensagem.anexo_tipo === 'AUDIO') {
-    return <PlayerAudio url={urlComToken} minhaPropria={minhaPropria} />
+    return <PlayerAudio url={urlComToken} minhaPropria={minhaPropria} aoLongPress={aoLongPress} />
   }
 
   return (
     <Pressable
       onPress={() => Linking.openURL(urlComToken)}
+      onLongPress={aoLongPress}
       style={[styles.documento, minhaPropria ? styles.documentoProprio : styles.documentoOutro]}
     >
       <Text style={styles.documentoIcone}>📄</Text>
@@ -114,7 +143,15 @@ function PlayerVideo({ url }: { url: string }) {
   return <VideoView player={player} style={styles.video} nativeControls contentFit="cover" />
 }
 
-function PlayerAudio({ url, minhaPropria }: { url: string; minhaPropria: boolean }) {
+function PlayerAudio({
+  url,
+  minhaPropria,
+  aoLongPress,
+}: {
+  url: string
+  minhaPropria: boolean
+  aoLongPress?: (evento: GestureResponderEvent) => void
+}) {
   const player = useAudioPlayer(url)
   const status = useAudioPlayerStatus(player)
 
@@ -130,6 +167,7 @@ function PlayerAudio({ url, minhaPropria }: { url: string; minhaPropria: boolean
   return (
     <Pressable
       onPress={aoTocar}
+      onLongPress={aoLongPress}
       style={[styles.audio, minhaPropria ? styles.audioProprio : styles.audioOutro]}
     >
       <Text style={[styles.audioBotao, minhaPropria && styles.audioBotaoProprio]}>
