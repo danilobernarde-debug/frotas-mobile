@@ -351,6 +351,19 @@ export function BarraEntrada({
           multiline
           returnKeyType="default"
           editable={!gravando}
+          // iOS trata o campo como candidato a preenchimento automático
+          // (senha/código salvo) e soma "AutoFill" ao lado de "Paste" no
+          // menu de toque longo -- textContentType="none" deveria tirar
+          // esse candidato, mas em campo multiline é um limite conhecido
+          // do próprio React Native/iOS (o item continua aparecendo mesmo
+          // assim; não existe prop equivalente pra forçar isso num
+          // UITextView multilinha, só reescrevendo o menu nativo, fora do
+          // que dá pra fazer sem código nativo próprio).
+          textContentType="none"
+          autoComplete="off"
+          // No Android, diferente do iOS, isto realmente desliga a
+          // sugestão de Autofill do sistema pra este campo.
+          importantForAutofill="no"
         />
 
         {mostrarMicrofone ? (
