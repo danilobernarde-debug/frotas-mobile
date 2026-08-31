@@ -72,7 +72,7 @@ export default function LayoutApp() {
   )
 }
 
-const PAPEIS_LIBERADOS: PapelUsuario[] = ['ENCARREGADO', 'GESTOR', 'ADMIN']
+const PAPEIS_LIBERADOS: PapelUsuario[] = ['MOTORISTA', 'GESTOR', 'ADMIN']
 
 const styles = StyleSheet.create({
   centro: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },

@@ -5,7 +5,7 @@
  * encarregado realmente usa (não é o schema inteiro).
  */
 
-export type PapelUsuario = 'ADMIN' | 'GESTOR' | 'CONSULTA' | 'ENCARREGADO'
+export type PapelUsuario = 'ADMIN' | 'GESTOR' | 'CONSULTA' | 'MOTORISTA'
 
 export interface Perfil {
   id: string

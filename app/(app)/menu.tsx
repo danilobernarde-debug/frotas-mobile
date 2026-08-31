@@ -9,10 +9,10 @@ export default function TelaMenu() {
   const { perfil } = useAuth()
 
   // GESTOR/ADMIN não têm solicitação/checklist própria pra fazer -- só
-  // acompanham e respondem os encarregados da regional, por isso um menu
+  // acompanham e respondem os motoristas da regional, por isso um menu
   // diferente (ver app/(app)/_layout.tsx pro gate de papel que já garante
-  // que só ENCARREGADO/GESTOR/ADMIN chegam aqui).
-  if (perfil?.papel !== 'ENCARREGADO') {
+  // que só MOTORISTA/GESTOR/ADMIN chegam aqui).
+  if (perfil?.papel !== 'MOTORISTA') {
     return (
       <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
         <CabecalhoApp />
