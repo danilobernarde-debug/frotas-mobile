@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
 import { supabase } from '../../lib/supabase'
 import type { CategoriaSolicitacao, Mensagem } from '../../lib/tipos'
@@ -96,22 +96,34 @@ export function useEncarregadosComAtividade() {
     setItens([...porEncarregado.values()].sort((a, b) => (a.ultimaMensagemEm < b.ultimaMensagemEm ? 1 : -1)))
   }, [perfil])
 
+  // Ref com a versão mais nova de recarregar -- ver comentário grande em
+  // useMinhasSolicitacoes.ts (mesmo hook irmão, mesmo achado real): sem
+  // isto, o efeito de Realtime reagia a qualquer objeto `perfil` novo do
+  // useAuth() (não só troca de id de verdade) e recriava o canal toda
+  // hora, causando "cannot add postgres_changes callbacks... after
+  // subscribe()" quando a remoção do canal anterior ainda não tinha
+  // terminado.
+  const recarregarRef = useRef(recarregar)
+  useEffect(() => {
+    recarregarRef.current = recarregar
+  }, [recarregar])
+
   useEffect(() => {
     setCarregando(true)
-    recarregar().finally(() => setCarregando(false))
-  }, [recarregar])
+    recarregarRef.current().finally(() => setCarregando(false))
+  }, [perfil?.id])
 
   // Mesmo padrão de frotas-web/atividade-automatica: não confia no payload
   // do evento, só usa como aviso pra buscar de novo (debounce curto evita
   // empilhar uma busca por linha quando várias mudam juntas).
   useEffect(() => {
-    if (!perfil) return
+    if (!perfil?.id) return
     let timeoutId: ReturnType<typeof setTimeout> | null = null
     const canal = supabase.channel(`frota-atividade-gestor:${perfil.id}`)
     for (const tabela of ['frota_aprovacoes', 'frota_mensagens']) {
       canal.on('postgres_changes', { event: '*', schema: 'public', table: tabela }, () => {
         if (timeoutId) clearTimeout(timeoutId)
-        timeoutId = setTimeout(recarregar, 400)
+        timeoutId = setTimeout(() => recarregarRef.current(), 400)
       })
     }
     canal.subscribe()
@@ -119,7 +131,7 @@ export function useEncarregadosComAtividade() {
       if (timeoutId) clearTimeout(timeoutId)
       supabase.removeChannel(canal)
     }
-  }, [perfil, recarregar])
+  }, [perfil?.id])
 
   return { itens, carregando, recarregar }
 }

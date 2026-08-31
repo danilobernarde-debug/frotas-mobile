@@ -180,24 +180,42 @@ export function useMinhasSolicitacoes(encarregadoId?: string) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perfil?.id, encarregadoId])
 
+  // Ref com a versão mais nova de buscarNovidades -- os três efeitos
+  // abaixo (sync, AppState, Realtime) chamam sempre a atual sem precisar
+  // dela como dependência. Sem isto, cada um reagia a QUALQUER mudança de
+  // referência de `perfil` (objeto novo do useAuth() a cada re-render,
+  // não só quando o id muda de verdade) e recriava o canal Realtime toda
+  // hora -- achado real, visto ao vivo no iPhone: "cannot add
+  // postgres_changes callbacks... after subscribe()". O motivo exato:
+  // supabase.channel(mesmoNome) devolve o MESMO canal já inscrito se a
+  // remoção do anterior (removeChannel, assíncrona) ainda não tinha
+  // terminado quando o efeito rodava de novo -- os novos .on() caíam
+  // então num canal que já tinha passado por subscribe(), o que a
+  // biblioteca recusa. Sem essa recriação a toda hora, a corrida não
+  // acontece mais.
+  const buscarNovidadesRef = useRef(buscarNovidades)
+  useEffect(() => {
+    buscarNovidadesRef.current = buscarNovidades
+  }, [buscarNovidades])
+
   // Recarrega sempre que uma rodada de sync termina -- é assim que uma
   // solicitação/mensagem "local" vira "servidor" na tela, e que a decisão
   // do gestor (aprovado/reprovado) aparece depois de sincronizar de novo.
   useEffect(() => {
     return assinarEstadoSync((estado) => {
-      if (!estado.sincronizando) buscarNovidades()
+      if (!estado.sincronizando) buscarNovidadesRef.current()
     })
-  }, [buscarNovidades])
+  }, [])
 
   // Volta pro primeiro plano / rede reconecta -- Realtime (abaixo) pode ter
   // perdido eventos enquanto desconectado, então uma busca incremental
   // continua valendo como rede de segurança nessas transições.
   useEffect(() => {
     const assinatura = AppState.addEventListener('change', (estado) => {
-      if (estado === 'active') buscarNovidades()
+      if (estado === 'active') buscarNovidadesRef.current()
     })
     return () => assinatura.remove()
-  }, [buscarNovidades])
+  }, [])
 
   // Realtime no lugar do poll de 30s fixo -- mesma ideia já usada no
   // painel web (AtualizacaoAutomatica): não confia no payload do evento
@@ -205,15 +223,17 @@ export function useMinhasSolicitacoes(encarregadoId?: string) {
   // normal), só usa o evento como aviso de "algo mudou, vai ver o que" --
   // debounce curto evita empilhar uma busca por linha quando várias mudam
   // juntas (ex.: o app mobile de outro encarregado sincronizando várias de
-  // uma vez).
+  // uma vez). Depende só de perfil?.id/encarregadoId (não do objeto
+  // `perfil` inteiro nem de `buscarNovidades`) -- ver comentário grande
+  // acima do porquê.
   useEffect(() => {
-    if (!perfil) return
+    if (!perfil?.id) return
     const timeoutRef = { current: null as ReturnType<typeof setTimeout> | null }
     const canal = supabase.channel(`frota-chat:${perfil.id}:${encarregadoId ?? 'proprio'}`)
     for (const tabela of ['frota_aprovacoes', 'frota_mensagens']) {
       canal.on('postgres_changes', { event: '*', schema: 'public', table: tabela }, () => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current)
-        timeoutRef.current = setTimeout(buscarNovidades, 400)
+        timeoutRef.current = setTimeout(() => buscarNovidadesRef.current(), 400)
       })
     }
     canal.subscribe()
@@ -221,7 +241,7 @@ export function useMinhasSolicitacoes(encarregadoId?: string) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
       supabase.removeChannel(canal)
     }
-  }, [perfil, buscarNovidades])
+  }, [perfil?.id, encarregadoId])
 
   return { entradas, carregando, recarregar: buscarNovidades }
 }
