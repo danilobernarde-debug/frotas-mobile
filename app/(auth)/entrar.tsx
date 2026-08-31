@@ -38,8 +38,7 @@ export default function TelaEntrar() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.conteudo}>
-        <Text style={styles.titulo}>Controle de Frota</Text>
-        <Text style={styles.subtitulo}>App do encarregado de campo</Text>
+        <Text style={styles.titulo}>Gestão de Frotas</Text>
 
         <View style={styles.campo}>
           <Text style={styles.rotulo}>E-mail</Text>
@@ -87,8 +86,7 @@ export default function TelaEntrar() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   conteudo: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
-  titulo: { fontSize: 24, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
-  subtitulo: { fontSize: 14, color: '#64748b', textAlign: 'center', marginTop: 4, marginBottom: 32 },
+  titulo: { fontSize: 24, fontWeight: '700', color: '#0f172a', textAlign: 'center', marginBottom: 32 },
   campo: { marginBottom: 16 },
   rotulo: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 6 },
   input: {
