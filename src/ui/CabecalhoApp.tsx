@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router'
+import * as Updates from 'expo-updates'
 import { useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../auth/useAuth'
 
 function inicial(nome: string | undefined) {
@@ -28,6 +29,33 @@ export function CabecalhoApp({
   const { perfil, sair } = useAuth()
   const router = useRouter()
   const [contaAberta, setContaAberta] = useState(false)
+  const [verificando, setVerificando] = useState(false)
+  const [statusAtualizacao, setStatusAtualizacao] = useState<string | null>(null)
+
+  /** Updates.isEnabled é false no Expo Go (só funciona em build próprio,
+   *  com expo-updates compilado nativo) -- avisa em vez de falhar calado. */
+  async function verificarAtualizacao() {
+    if (!Updates.isEnabled) {
+      setStatusAtualizacao('Só funciona no app instalado, não no Expo Go.')
+      return
+    }
+    setVerificando(true)
+    setStatusAtualizacao(null)
+    try {
+      const resultado = await Updates.checkForUpdateAsync()
+      if (!resultado.isAvailable) {
+        setStatusAtualizacao('Você já está na versão mais recente.')
+        return
+      }
+      setStatusAtualizacao('Baixando atualização…')
+      await Updates.fetchUpdateAsync()
+      await Updates.reloadAsync()
+    } catch {
+      setStatusAtualizacao('Não consegui verificar agora -- tenta de novo em instantes.')
+    } finally {
+      setVerificando(false)
+    }
+  }
 
   return (
     <>
@@ -60,6 +88,14 @@ export function CabecalhoApp({
             </View>
             <Text style={styles.contaNome}>{perfil?.nome}</Text>
             <Text style={styles.contaEmail}>{perfil?.email}</Text>
+            <Pressable onPress={verificarAtualizacao} disabled={verificando} style={styles.botaoAtualizar}>
+              {verificando ? (
+                <ActivityIndicator color="#0f766e" size="small" />
+              ) : (
+                <Text style={styles.botaoAtualizarTexto}>🔄 Verificar atualização</Text>
+              )}
+            </Pressable>
+            {statusAtualizacao && <Text style={styles.statusAtualizacao}>{statusAtualizacao}</Text>}
             <Pressable onPress={() => { setContaAberta(false); sair() }} style={styles.botaoSair}>
               <Text style={styles.botaoSairTexto}>Sair da conta</Text>
             </Pressable>
@@ -93,6 +129,9 @@ const styles = StyleSheet.create({
   avatarTextoGrande: { fontSize: 26 },
   contaNome: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   contaEmail: { fontSize: 13, color: '#64748b', marginTop: 2, marginBottom: 20 },
+  botaoAtualizar: { width: '100%', backgroundColor: '#f0fdfa', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginBottom: 10 },
+  botaoAtualizarTexto: { color: '#0f766e', fontWeight: '700', fontSize: 15 },
+  statusAtualizacao: { fontSize: 12, color: '#64748b', textAlign: 'center', marginBottom: 10 },
   botaoSair: { width: '100%', backgroundColor: '#fee2e2', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   botaoSairTexto: { color: '#be123c', fontWeight: '700', fontSize: 15 },
   botaoCancelar: { marginTop: 10, paddingVertical: 8 },

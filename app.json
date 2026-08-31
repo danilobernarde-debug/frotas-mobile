@@ -31,7 +31,14 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -64,6 +71,19 @@
           "microphonePermission": "Usado para gravar um áudio e mandar na conversa com a gestão de frotas."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "54b551bc-e39d-49ca-bee8-7c9a9315008f"
+      }
+    },
+    "owner": "danilobernardes",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/54b551bc-e39d-49ca-bee8-7c9a9315008f"
+    }
   }
 }
