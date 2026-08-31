@@ -48,11 +48,19 @@ export function BarraEntrada({
   onConcluido,
   respondendoA,
   aoLimparResposta,
+  encarregadoId,
 }: {
-  onNovaCategoria: (categoria: CategoriaSolicitacao) => void
+  /** Ausente quando GESTOR/ADMIN vendo a conversa de outra pessoa -- some
+   *  também a opção "solicitar" do menu "+" (ver MenuAnexo). */
+  onNovaCategoria?: (categoria: CategoriaSolicitacao) => void
   onConcluido: () => void
   respondendoA?: RespondendoA | null
   aoLimparResposta?: () => void
+  /** Só quando GESTOR/ADMIN está respondendo na conversa de OUTRA pessoa
+   *  (ver conversas/[id].tsx) -- sem isto, a mensagem vai pro payload sem
+   *  encarregadoId e o handler usa o próprio uid de quem está logado
+   *  (comportamento de sempre, do lado do encarregado). */
+  encarregadoId?: string
 }) {
   const { perfil } = useAuth()
   const [texto, setTexto] = useState('')
@@ -253,6 +261,7 @@ export function BarraEntrada({
         : undefined
 
     await enfileirar<MensagemPayload>(TIPO_MENSAGEM, {
+      encarregadoId,
       texto: digitado || undefined,
       anexo: anexoPayload,
       localizacao: localizacaoPayload,
@@ -325,6 +334,7 @@ export function BarraEntrada({
           onEscolherAnexo={aoEscolherAnexo}
           onEscolherLocalizacao={aoEscolherLocalizacao}
           desabilitado={gravando}
+          mostrarSolicitacao={!!onNovaCategoria}
         />
 
         <TextInput

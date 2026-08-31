@@ -1,7 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useAuth } from '../../../src/auth/useAuth'
 import { data as fmtData, moeda } from '../../../src/lib/formato'
 import { urlAnexo } from '../../../src/lib/api'
 import { supabase } from '../../../src/lib/supabase'
@@ -41,12 +42,35 @@ async function baixarComoDataUri(url: string, token: string): Promise<string> {
 export default function TelaDetalheSolicitacao() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const router = useRouter()
+  const { perfil } = useAuth()
   const [aprovacao, setAprovacao] = useState<Aprovacao | null>(null)
   const [anexos, setAnexos] = useState<AnexoAprovacao[]>([])
   const [token, setToken] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [fotosDataUri, setFotosDataUri] = useState<Record<number, string>>({})
   const [fotoAmpliada, setFotoAmpliada] = useState<number | null>(null)
+  const [decidindo, setDecidindo] = useState(false)
+
+  // GESTOR até enxerga esta tela (RLS deixa ver qualquer solicitação da
+  // regional), mas só ADMIN decide de verdade -- uma trigger no banco
+  // (trg_aprovacoes_aa_permissao) bloqueia a mudança de status pra
+  // qualquer outro papel, mesmo que a UPDATE passe pela RLS. Esconder o
+  // botão pra GESTOR evita um toque que sempre falharia. Mesmo gate do
+  // painel web (`ehAdmin` em PainelDecisao).
+  async function decidir(novoStatus: 'APROVADO' | 'REPROVADO') {
+    if (!aprovacao) return
+    setDecidindo(true)
+    // Update direto, igual o Server Action decidirAprovacao do painel web
+    // faz -- é só isso mesmo, o resto (quem decidiu, quando, status de
+    // pagamento inicial) é trigger no banco (0001_schema.sql:628-650).
+    const { error } = await supabase.from('frota_aprovacoes').update({ status: novoStatus }).eq('id', aprovacao.id)
+    setDecidindo(false)
+    if (error) {
+      Alert.alert('Não consegui salvar', 'Tenta de novo em alguns segundos.')
+      return
+    }
+    setAprovacao({ ...aprovacao, status: novoStatus })
+  }
 
   useEffect(() => {
     let cancelado = false
@@ -119,6 +143,25 @@ export default function TelaDetalheSolicitacao() {
         <ScrollView style={styles.tela} contentContainerStyle={styles.conteudo}>
           <Text style={styles.status}>{ROTULO_STATUS[aprovacao.status]}</Text>
           <Text style={styles.servico}>{aprovacao.servico}</Text>
+
+          {perfil?.papel === 'ADMIN' && aprovacao.status === 'PENDENTE' && (
+            <View style={styles.decisao}>
+              <Pressable
+                onPress={() => decidir('REPROVADO')}
+                disabled={decidindo}
+                style={[styles.botaoDecisao, styles.botaoReprovar, decidindo && styles.botaoDesabilitado]}
+              >
+                <Text style={styles.botaoDecisaoTexto}>Reprovar</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => decidir('APROVADO')}
+                disabled={decidindo}
+                style={[styles.botaoDecisao, styles.botaoAprovar, decidindo && styles.botaoDesabilitado]}
+              >
+                {decidindo ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.botaoDecisaoTexto}>Aprovar</Text>}
+              </Pressable>
+            </View>
+          )}
 
           <View style={styles.linha}>
             <Text style={styles.rotulo}>Placa</Text>
@@ -233,6 +276,12 @@ const styles = StyleSheet.create({
   textoVazio: { color: '#94a3b8' },
   status: { fontSize: 13, fontWeight: '700', color: '#0f766e', marginBottom: 4 },
   servico: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 16 },
+  decisao: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  botaoDecisao: { flex: 1, height: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  botaoAprovar: { backgroundColor: '#0d9488' },
+  botaoReprovar: { backgroundColor: '#be123c' },
+  botaoDesabilitado: { opacity: 0.6 },
+  botaoDecisaoTexto: { color: '#fff', fontWeight: '700', fontSize: 15 },
   linha: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   rotulo: { fontSize: 13, color: '#64748b' },
   valor: { fontSize: 14, color: '#1e293b', fontWeight: '600' },

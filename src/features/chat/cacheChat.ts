@@ -12,41 +12,60 @@ import type { Aprovacao, Mensagem } from '../../lib/tipos'
  * espaço, dá pra podar por data depois.
  */
 
-export async function lerCacheAprovacoes(): Promise<Aprovacao[]> {
+/** `encarregadoId` filtra a leitura pra thread de UMA pessoa só -- usado
+ *  pela conversa que um GESTOR/ADMIN abre pra ver alguém específico
+ *  (conversas/[id].tsx). O cache guarda a linha inteira como JSON (sem
+ *  coluna própria pra encarregado_id/solicitante_id), então o filtro é em
+ *  memória depois de ler -- volume de chat de frota é pequeno, não compensa
+ *  a complexidade de uma coluna indexada só pra isto agora. Sem o
+ *  parâmetro, comportamento de sempre: cache inteiro (thread do próprio
+ *  encarregado logado). */
+export async function lerCacheAprovacoes(encarregadoId?: string): Promise<Aprovacao[]> {
   const db = await obterBanco()
   const linhas = await db.getAllAsync<{ dado_json: string }>(
     'select dado_json from cache_aprovacoes order by criado_em asc',
   )
-  return linhas.map((l) => JSON.parse(l.dado_json) as Aprovacao)
+  const todas = linhas.map((l) => JSON.parse(l.dado_json) as Aprovacao)
+  return encarregadoId ? todas.filter((a) => a.solicitante_id === encarregadoId) : todas
 }
 
-export async function lerCacheMensagens(): Promise<Mensagem[]> {
+export async function lerCacheMensagens(encarregadoId?: string): Promise<Mensagem[]> {
   const db = await obterBanco()
   const linhas = await db.getAllAsync<{ dado_json: string }>(
     'select dado_json from cache_mensagens order by criado_em asc',
   )
-  return linhas.map((l) => JSON.parse(l.dado_json) as Mensagem)
+  const todas = linhas.map((l) => JSON.parse(l.dado_json) as Mensagem)
+  return encarregadoId ? todas.filter((m) => m.encarregado_id === encarregadoId) : todas
 }
 
 /** Maior atualizado_em já em cache -- ponto de partida da busca
  *  incremental (`where atualizado_em > isto`). null = cache vazio, ainda
- *  não tem nenhuma solicitação salva (primeira abertura do app). */
-export async function maiorAtualizadoEmAprovacoes(): Promise<string | null> {
-  const db = await obterBanco()
-  const linha = await db.getFirstAsync<{ maior: string | null }>(
-    'select max(atualizado_em) as maior from cache_aprovacoes',
-  )
-  return linha?.maior ?? null
+ *  não tem nenhuma solicitação salva (primeira abertura do app, ou
+ *  primeira vez abrindo a thread desta pessoa específica). */
+export async function maiorAtualizadoEmAprovacoes(encarregadoId?: string): Promise<string | null> {
+  if (!encarregadoId) {
+    const db = await obterBanco()
+    const linha = await db.getFirstAsync<{ maior: string | null }>(
+      'select max(atualizado_em) as maior from cache_aprovacoes',
+    )
+    return linha?.maior ?? null
+  }
+  const filtradas = await lerCacheAprovacoes(encarregadoId)
+  return filtradas.reduce<string | null>((maior, a) => (!maior || a.atualizado_em > maior ? a.atualizado_em : maior), null)
 }
 
 /** Maior criado_em já em cache -- frota_mensagens não tem UPDATE (mensagem
  *  enviada é definitiva), então criado_em já basta pra saber o que é novo. */
-export async function maiorCriadoEmMensagens(): Promise<string | null> {
-  const db = await obterBanco()
-  const linha = await db.getFirstAsync<{ maior: string | null }>(
-    'select max(criado_em) as maior from cache_mensagens',
-  )
-  return linha?.maior ?? null
+export async function maiorCriadoEmMensagens(encarregadoId?: string): Promise<string | null> {
+  if (!encarregadoId) {
+    const db = await obterBanco()
+    const linha = await db.getFirstAsync<{ maior: string | null }>(
+      'select max(criado_em) as maior from cache_mensagens',
+    )
+    return linha?.maior ?? null
+  }
+  const filtradas = await lerCacheMensagens(encarregadoId)
+  return filtradas.reduce<string | null>((maior, m) => (!maior || m.criado_em > maior ? m.criado_em : maior), null)
 }
 
 export async function gravarAprovacoesNoCache(linhas: Aprovacao[]): Promise<void> {

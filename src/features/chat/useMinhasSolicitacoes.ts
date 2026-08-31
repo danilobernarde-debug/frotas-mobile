@@ -88,8 +88,17 @@ function montarEntradas(
  * funciona sem rede) e busca só o que mudou desde a última vez -- e
  * Realtime (Supabase) no lugar do poll de 30s fixo, avisando na hora
  * quando alguma coisa muda, igual ao painel web já faz.
+ *
+ * `encarregadoId` (opcional): sem ele, é a própria thread de quem está
+ * logado (uso de sempre, chat.tsx do ENCARREGADO) -- RLS sozinho já limita
+ * a isso, sem precisar de filtro nenhum na consulta. Com ele, é a thread de
+ * UMA pessoa específica vista por um GESTOR/ADMIN (conversas/[id].tsx) --
+ * aí sim filtra explicitamente (mesmo padrão de
+ * frotas-web/src/app/(painel)/atividade/dados.ts:39,46), inclusive na
+ * leitura/watermark do cache local (ver cacheChat.ts), já que o cache
+ * guarda tudo junto no mesmo SQLite.
  */
-export function useMinhasSolicitacoes() {
+export function useMinhasSolicitacoes(encarregadoId?: string) {
   const { perfil } = useAuth()
   const [entradas, setEntradas] = useState<EntradaChatReal[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -112,12 +121,16 @@ export function useMinhasSolicitacoes() {
   const buscarNovidades = useCallback(async () => {
     if (!perfil) return
     const [desdeAprovacoes, desdeMensagens] = await Promise.all([
-      maiorAtualizadoEmAprovacoes(),
-      maiorCriadoEmMensagens(),
+      maiorAtualizadoEmAprovacoes(encarregadoId),
+      maiorCriadoEmMensagens(encarregadoId),
     ])
 
-    const consultaAprovacoes = supabase.from('frota_aprovacoes').select(SELECT_APROVACOES)
-    const consultaMensagens = supabase.from('frota_mensagens').select(SELECT_MENSAGENS)
+    let consultaAprovacoes = supabase.from('frota_aprovacoes').select(SELECT_APROVACOES)
+    let consultaMensagens = supabase.from('frota_mensagens').select(SELECT_MENSAGENS)
+    if (encarregadoId) {
+      consultaAprovacoes = consultaAprovacoes.eq('solicitante_id', encarregadoId)
+      consultaMensagens = consultaMensagens.eq('encarregado_id', encarregadoId)
+    }
 
     const [respostaAprovacoes, respostaMensagens] = await Promise.all([
       desdeAprovacoes
@@ -142,7 +155,7 @@ export function useMinhasSolicitacoes() {
     await gravarAprovacoesNoCache(novasAprovacoes)
     await gravarMensagensNoCache(novasMensagens)
     await publicarEntradas()
-  }, [perfil, publicarEntradas])
+  }, [perfil, encarregadoId, publicarEntradas])
 
   // Carga inicial: lê o cache local primeiro (mostra na hora, mesmo sem
   // rede/antes da rede responder) e só depois busca as novidades.
@@ -150,7 +163,10 @@ export function useMinhasSolicitacoes() {
     if (!perfil) return
     let cancelado = false
     ;(async () => {
-      const [aprovacoesCache, mensagensCache] = await Promise.all([lerCacheAprovacoes(), lerCacheMensagens()])
+      const [aprovacoesCache, mensagensCache] = await Promise.all([
+        lerCacheAprovacoes(encarregadoId),
+        lerCacheMensagens(encarregadoId),
+      ])
       if (cancelado) return
       cacheAprovacoesRef.current = new Map(aprovacoesCache.map((a) => [a.id, a]))
       cacheMensagensRef.current = new Map(mensagensCache.map((m) => [m.id, m]))
@@ -162,7 +178,7 @@ export function useMinhasSolicitacoes() {
       cancelado = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perfil?.id])
+  }, [perfil?.id, encarregadoId])
 
   // Recarrega sempre que uma rodada de sync termina -- é assim que uma
   // solicitação/mensagem "local" vira "servidor" na tela, e que a decisão
@@ -193,7 +209,7 @@ export function useMinhasSolicitacoes() {
   useEffect(() => {
     if (!perfil) return
     const timeoutRef = { current: null as ReturnType<typeof setTimeout> | null }
-    const canal = supabase.channel(`frota-chat:${perfil.id}`)
+    const canal = supabase.channel(`frota-chat:${perfil.id}:${encarregadoId ?? 'proprio'}`)
     for (const tabela of ['frota_aprovacoes', 'frota_mensagens']) {
       canal.on('postgres_changes', { event: '*', schema: 'public', table: tabela }, () => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current)

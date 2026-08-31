@@ -1,6 +1,7 @@
 import { Redirect, Stack } from 'expo-router'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../src/auth/useAuth'
+import type { PapelUsuario } from '../../src/lib/tipos'
 
 export default function LayoutApp() {
   const { sessao, perfil, carregando, sair } = useAuth()
@@ -26,7 +27,10 @@ export default function LayoutApp() {
     )
   }
 
-  if (perfil.papel !== 'ENCARREGADO') {
+  // CONSULTA (só leitura no painel web) ainda não tem lugar nenhum no app
+  // de campo -- ENCARREGADO (motorista) e GESTOR/ADMIN (vêem/respondem
+  // conversas, ADMIN também aprova) passam.
+  if (!PAPEIS_LIBERADOS.includes(perfil.papel)) {
     return (
       <View style={styles.centro}>
         <Text style={styles.titulo}>Conta ainda não liberada</Text>
@@ -46,6 +50,14 @@ export default function LayoutApp() {
       <Stack.Screen name="menu" />
       <Stack.Screen name="chat" />
       <Stack.Screen name="checklists" />
+      <Stack.Screen name="conversas" />
+      {/* Pasta separada (não conversas/[id]) de propósito -- uma pasta com
+          index.tsx E [id].tsx juntos fazia o Expo Router misrotear
+          "/conversas/index" pra dentro de [id] (achado real, testado ao
+          vivo: a navegação da lista sempre caía direto numa conversa vazia
+          com id inválido). Mesmo padrão isolado que solicitacao/[id] já
+          usa, sem esse problema. */}
+      <Stack.Screen name="conversa/[id]" options={{ presentation: 'card' }} />
       <Stack.Screen name="solicitacao/[id]" options={{ presentation: 'card' }} />
       {/* presentation: 'modal' (era assim antes) trava a abertura da
           câmera custom -- CameraCustomizadaHost usa <Modal> do RN, que não
@@ -59,6 +71,8 @@ export default function LayoutApp() {
     </Stack>
   )
 }
+
+const PAPEIS_LIBERADOS: PapelUsuario[] = ['ENCARREGADO', 'GESTOR', 'ADMIN']
 
 const styles = StyleSheet.create({
   centro: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },

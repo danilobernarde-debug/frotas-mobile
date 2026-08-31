@@ -1,10 +1,31 @@
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useAuth } from '../../src/auth/useAuth'
 import { CabecalhoApp } from '../../src/ui/CabecalhoApp'
 
 export default function TelaMenu() {
   const router = useRouter()
+  const { perfil } = useAuth()
+
+  // GESTOR/ADMIN não têm solicitação/checklist própria pra fazer -- só
+  // acompanham e respondem os encarregados da regional, por isso um menu
+  // diferente (ver app/(app)/_layout.tsx pro gate de papel que já garante
+  // que só ENCARREGADO/GESTOR/ADMIN chegam aqui).
+  if (perfil?.papel !== 'ENCARREGADO') {
+    return (
+      <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
+        <CabecalhoApp />
+        <View style={styles.conteudo}>
+          <Pressable onPress={() => router.push('/(app)/conversas')} style={styles.cartao}>
+            <Text style={styles.icone}>💬</Text>
+            <Text style={styles.rotulo}>Conversas</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
       <CabecalhoApp />

@@ -25,6 +25,11 @@ export interface LocalizacaoMensagemPayload {
 }
 
 export interface MensagemPayload {
+  /** Só quando quem está mandando é GESTOR/ADMIN respondendo na conversa
+   *  de OUTRA pessoa (ver conversas/[id].tsx) -- do lado do encarregado
+   *  (BarraEntrada sem essa prop), fica undefined e usa o próprio uid,
+   *  igual sempre foi. */
+  encarregadoId?: string
   texto?: string
   /** Id (do servidor) da mensagem sendo respondida, estilo WhatsApp.
    *  Só mensagens já sincronizadas têm esse id -- não dá pra responder
@@ -76,11 +81,11 @@ async function enviar(
 
   // encarregado_id não tem gatilho de autoria (o gatilho no banco só
   // carimba autor_id) -- essa coluna também precisa aceitar um
-  // GESTOR/ADMIN gravando na thread de OUTRA pessoa (não faria sentido um
-  // default fixo em auth.uid()). Aqui, do lado do encarregado, é sempre o
-  // próprio uid.
+  // GESTOR/ADMIN gravando na thread de OUTRA pessoa. payload.encarregadoId
+  // só vem preenchido nesse caso (ver conversas/[id].tsx); do lado do
+  // encarregado é sempre o próprio uid.
   const { error } = await supabase.from('frota_mensagens').insert({
-    encarregado_id: sessao.session.user.id,
+    encarregado_id: payload.encarregadoId ?? sessao.session.user.id,
     texto: payload.texto ?? null,
     respondendo_a: payload.respondendoA ?? null,
     respondendo_aprovacao_id: payload.respondendoAprovacaoId ?? null,

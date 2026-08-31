@@ -27,14 +27,19 @@ export function MenuAnexo({
   onEscolherAnexo,
   onEscolherLocalizacao,
   desabilitado = false,
+  mostrarSolicitacao = true,
 }: {
-  onEscolher: (categoria: CategoriaSolicitacao) => void
+  onEscolher?: (categoria: CategoriaSolicitacao) => void
   onEscolherAnexo: (fonte: 'camera' | 'galeria' | 'documento') => Promise<void>
   onEscolherLocalizacao: () => void
   /** true enquanto uma solicitação já está em andamento -- evita iniciar
    *  uma segunda por cima da primeira. Não desabilita os anexos: nada
    *  impede anexar um arquivo enquanto uma solicitação está em curso. */
   desabilitado?: boolean
+  /** false quando quem está no chat é GESTOR/ADMIN vendo a conversa de
+   *  OUTRA pessoa (ver conversas/[id].tsx) -- "solicitar abastecimento/
+   *  manutenção" só faz sentido do lado do próprio encarregado. */
+  mostrarSolicitacao?: boolean
 }) {
   const [aberto, setAberto] = useState(false)
   const acaoPendente = useRef<(() => void) | null>(null)
@@ -97,24 +102,28 @@ export function MenuAnexo({
       >
         <Pressable style={styles.fundo} onPress={() => setAberto(false)}>
           <View style={styles.folha}>
-            <Text style={styles.titulo}>O que você quer solicitar?</Text>
-            {OPCOES_SOLICITACAO.map((opcao) => (
-              <Pressable
-                key={opcao.categoria}
-                disabled={desabilitado}
-                onPress={() => fecharEDepois(() => onEscolher(opcao.categoria))}
-                style={({ pressed }) => [
-                  styles.opcao,
-                  desabilitado && styles.opcaoDesabilitada,
-                  pressed && !desabilitado && styles.opcaoPressionada,
-                ]}
-              >
-                <Text style={styles.opcaoIcone}>{opcao.icone}</Text>
-                <Text style={styles.opcaoTexto}>{opcao.rotulo}</Text>
-              </Pressable>
-            ))}
+            {mostrarSolicitacao && onEscolher && (
+              <>
+                <Text style={styles.titulo}>O que você quer solicitar?</Text>
+                {OPCOES_SOLICITACAO.map((opcao) => (
+                  <Pressable
+                    key={opcao.categoria}
+                    disabled={desabilitado}
+                    onPress={() => fecharEDepois(() => onEscolher(opcao.categoria))}
+                    style={({ pressed }) => [
+                      styles.opcao,
+                      desabilitado && styles.opcaoDesabilitada,
+                      pressed && !desabilitado && styles.opcaoPressionada,
+                    ]}
+                  >
+                    <Text style={styles.opcaoIcone}>{opcao.icone}</Text>
+                    <Text style={styles.opcaoTexto}>{opcao.rotulo}</Text>
+                  </Pressable>
+                ))}
 
-            <View style={styles.divisor} />
+                <View style={styles.divisor} />
+              </>
+            )}
 
             {OPCOES_ANEXO.map((opcao) => (
               <Pressable
