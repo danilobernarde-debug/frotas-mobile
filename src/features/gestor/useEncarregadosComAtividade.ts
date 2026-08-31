@@ -116,10 +116,20 @@ export function useEncarregadosComAtividade() {
   // Mesmo padrão de frotas-web/atividade-automatica: não confia no payload
   // do evento, só usa como aviso pra buscar de novo (debounce curto evita
   // empilhar uma busca por linha quando várias mudam juntas).
+  //
+  // Sufixo aleatório no nome do canal -- ver comentário grande no mesmo
+  // ponto de useMinhasSolicitacoes.ts: remontar esta tela rápido o
+  // bastante (sair e voltar pra "Conversas") roda um novo efeito antes do
+  // removeChannel() do anterior terminar, e supabase.channel(mesmoNome)
+  // reaproveita o canal antigo (ainda "subscribed") enquanto isso -- daí o
+  // "cannot add postgres_changes callbacks... after subscribe()" via
+  // Render Error, visto de novo ao vivo no iPhone. Nome único por
+  // montagem resolve sem depender de timing.
   useEffect(() => {
     if (!perfil?.id) return
     let timeoutId: ReturnType<typeof setTimeout> | null = null
-    const canal = supabase.channel(`frota-atividade-gestor:${perfil.id}`)
+    const idUnico = Math.random().toString(36).slice(2)
+    const canal = supabase.channel(`frota-atividade-gestor:${perfil.id}:${idUnico}`)
     for (const tabela of ['frota_aprovacoes', 'frota_mensagens']) {
       canal.on('postgres_changes', { event: '*', schema: 'public', table: tabela }, () => {
         if (timeoutId) clearTimeout(timeoutId)

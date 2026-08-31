@@ -226,10 +226,21 @@ export function useMinhasSolicitacoes(encarregadoId?: string) {
   // uma vez). Depende só de perfil?.id/encarregadoId (não do objeto
   // `perfil` inteiro nem de `buscarNovidades`) -- ver comentário grande
   // acima do porquê.
+  //
+  // Sufixo aleatório no nome do canal (mesmo com as dependências já
+  // estáveis): achado real, visto de novo ao vivo mesmo depois do
+  // comentário acima -- remontar a MESMA tela rápido o bastante (ex.:
+  // sair e entrar de novo em "Conversas") roda um novo efeito antes do
+  // removeChannel() do anterior (assíncrono) terminar; como
+  // supabase.channel(mesmoNome) reaproveita o canal já registrado
+  // enquanto a remoção não termina, os .on() novos caíam de novo num
+  // canal já com subscribe() feito. Um nome único por montagem elimina
+  // esse reaproveitamento de vez, sem depender de timing.
   useEffect(() => {
     if (!perfil?.id) return
     const timeoutRef = { current: null as ReturnType<typeof setTimeout> | null }
-    const canal = supabase.channel(`frota-chat:${perfil.id}:${encarregadoId ?? 'proprio'}`)
+    const idUnico = Math.random().toString(36).slice(2)
+    const canal = supabase.channel(`frota-chat:${perfil.id}:${encarregadoId ?? 'proprio'}:${idUnico}`)
     for (const tabela of ['frota_aprovacoes', 'frota_mensagens']) {
       canal.on('postgres_changes', { event: '*', schema: 'public', table: tabela }, () => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current)
