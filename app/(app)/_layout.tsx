@@ -1,10 +1,47 @@
-import { Redirect, Stack } from 'expo-router'
+import { Redirect, Stack, useRouter } from 'expo-router'
+import * as Notifications from 'expo-notifications'
+import { useEffect } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../src/auth/useAuth'
+import { registrarPushToken } from '../../src/lib/pushNotifications'
 import type { PapelUsuario } from '../../src/lib/tipos'
+
+type DadosNotificacao = { tipo?: 'mensagem' | 'solicitacao'; encarregadoId?: string; aprovacaoId?: number }
 
 export default function LayoutApp() {
   const { sessao, perfil, carregando, sair } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (perfil?.id) registrarPushToken(perfil.id)
+  }, [perfil?.id])
+
+  // Toque na notificação abre a conversa/solicitação certa -- MOTORISTA
+  // sempre tem uma thread só (a própria, chat.tsx); GESTOR/ADMIN têm uma
+  // por motorista (conversa/[id].tsx), por isso o encarregadoId do
+  // payload (ver 0035_notificacao_push.sql) só é usado nesse segundo
+  // caso. getLastNotificationResponseAsync cobre o app fechado (cold
+  // start); o listener cobre em segundo plano/já aberto.
+  useEffect(() => {
+    function tratarResposta(resposta: Notifications.NotificationResponse) {
+      const dados = resposta.notification.request.content.data as DadosNotificacao
+      if (dados?.tipo === 'mensagem') {
+        if (perfil?.papel === 'MOTORISTA') {
+          router.push('/(app)/chat')
+        } else if (dados.encarregadoId) {
+          router.push({ pathname: '/(app)/conversa/[id]', params: { id: dados.encarregadoId } })
+        }
+      } else if (dados?.tipo === 'solicitacao' && dados.aprovacaoId != null) {
+        router.push({ pathname: '/(app)/solicitacao/[id]', params: { id: String(dados.aprovacaoId) } })
+      }
+    }
+
+    Notifications.getLastNotificationResponseAsync().then((resposta) => {
+      if (resposta) tratarResposta(resposta)
+    })
+    const assinatura = Notifications.addNotificationResponseReceivedListener(tratarResposta)
+    return () => assinatura.remove()
+  }, [perfil?.papel, router])
 
   if (carregando) {
     return (

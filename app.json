@@ -70,6 +70,12 @@
         {
           "microphonePermission": "Usado para gravar um áudio e mandar na conversa com a gestão de frotas."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0d9488"
+        }
       ]
     ],
     "extra": {
