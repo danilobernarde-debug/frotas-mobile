@@ -33,6 +33,12 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Firebase -- chave de conta de serviço (segredo, nunca commitar);
+# google-services.json fica de fora do ignore de propósito (não é
+# segredo, é referenciado em app.json/android.googleServicesFile e
+# precisa estar no repo pro build funcionar).
+Firebase/*firebase-adminsdk*.json
+
 # typescript
 *.tsbuildinfo
 
