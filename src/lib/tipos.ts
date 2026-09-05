@@ -72,6 +72,10 @@ export interface Aprovacao {
   criado_em: string
   atualizado_em: string
   veiculo?: Pick<Veiculo, 'id' | 'placa' | 'modelo'> | null
+  /** Só os TIPOS dos anexos, sem caminho nem legenda -- é o bastante pro
+   *  card do chat dizer que o comprovante chegou, sem puxar o peso da
+   *  lista inteira em toda sincronização. */
+  anexos?: { tipo: TipoAnexo }[] | null
 }
 
 export interface AnexoAprovacao {

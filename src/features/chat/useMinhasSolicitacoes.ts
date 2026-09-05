@@ -27,7 +27,11 @@ import type { EntradaChatReal } from './types'
  *  histórico completo de cara). */
 const LIMITE_PRIMEIRA_CARGA = 200
 
-const SELECT_APROVACOES = '*, veiculo:frota_veiculos(id, placa, modelo)'
+// `anexos` só com o tipo: o card precisa saber que existe comprovante,
+// não quais são os arquivos. Puxar caminho/legenda de todo anexo em cada
+// sincronização custaria bem mais pra responder a mesma pergunta.
+const SELECT_APROVACOES =
+  '*, veiculo:frota_veiculos(id, placa, modelo), anexos:frota_aprovacao_anexos(tipo)'
 const SELECT_MENSAGENS = '*, autor:frota_perfis!frota_mensagens_autor_id_fkey(id, nome)'
 
 function montarEntradas(
