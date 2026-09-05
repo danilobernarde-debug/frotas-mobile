@@ -136,6 +136,7 @@ export default function TelaDetalheSolicitacao() {
   const aprovada = aprovacao?.status === 'APROVADO'
   const comprovantes = anexos.filter((a) => a.tipo === 'COMPROVANTE')
   const observacaoAudio = anexos.find((a) => a.tipo === 'OBSERVACAO') ?? null
+  const fotosPix = anexos.filter((a) => a.tipo === 'PIX')
   /**
    * Quem pediu pode completar a chave depois de enviar -- ela costuma
    * chegar depois da solicitação (o frentista foi buscar o QR, o dono não
@@ -178,7 +179,11 @@ export default function TelaDetalheSolicitacao() {
    * que está dois dedos acima. Lá a edição fica no próprio quadro que
    * exibe a chave.
    */
-  const pixNoFormulario = ehMinha && !abastecimentoPreenchido
+  const pixNoFormulario = mostrarFormAbastecimento && ehMinha && !abastecimentoPreenchido
+  /** A ação de informar/editar a chave mora no quadro do PIX, EXCETO
+   *  quando ela é passo do formulário aberto -- aí seriam dois campos
+   *  pedindo a mesma chave na mesma tela. */
+  const editarPixNoQuadro = podeInformarPix && !pixNoFormulario
   /** As fotos são o passo 5 ou o 6, conforme a chave ocupe um número. */
   const passoFotos = pixNoFormulario ? 6 : 5
   const litrosNum = paraNumero(litros)
@@ -835,9 +840,15 @@ export default function TelaDetalheSolicitacao() {
               abastecimento a chave é o passo 5 lá dentro -- dois lugares
               pra corrigir a mesma coisa, cada um com seu botão de salvar,
               era o que confundia. */}
-          {aprovacao.chave_pix && !editandoPix && (
+          {/* Um quadro só pro PIX: a chave, a foto dela e a ação. Eram
+              três lugares -- texto num bloco, foto numa seção lá embaixo,
+              e um bloco à parte quando não havia chave -- e a conferência
+              que quem paga faz é justamente comparar chave e foto. */}
+          {(aprovacao.chave_pix || fotosPix.length > 0 || editarPixNoQuadro) && !editandoPix && (
             <View style={styles.blocoPix}>
-              <Text style={styles.rotuloPix}>Chave PIX informada pelo motorista</Text>
+              <Text style={styles.rotuloPix}>
+                {aprovacao.chave_pix ? 'Chave PIX informada pelo motorista' : 'Chave PIX'}
+              </Text>
               {/* selectable: quem paga precisa copiar a chave (toque
                   longo -> Copiar). Não usa área de transferência via
                   código de propósito -- expo-clipboard é módulo nativo e
@@ -848,11 +859,38 @@ export default function TelaDetalheSolicitacao() {
                   antes de mandar o dinheiro. O mesmo módulo que aplica a
                   máscara na digitação reconhece o valor gravado, então as
                   duas telas mostram a chave igual. */}
-              <Text style={styles.chavePix} selectable>
-                {formatarChaveGravada(aprovacao.chave_pix)}
-              </Text>
-              <Text style={styles.dicaPix}>Toque e segure para copiar.</Text>
-              {podeInformarPix && (
+              {aprovacao.chave_pix ? (
+                <>
+                  <Text style={styles.chavePix} selectable>
+                    {formatarChaveGravada(aprovacao.chave_pix)}
+                  </Text>
+                  <Text style={styles.dicaPix}>Toque e segure para copiar.</Text>
+                </>
+              ) : (
+                <Text style={styles.dicaPix}>
+                  Ainda não informada. Sem ela a gestão não tem para onde pagar.
+                </Text>
+              )}
+
+              {/* A foto da chave/QR fica no MESMO quadro do texto: quem
+                  paga confere um contra o outro, e ter os dois em seções
+                  separadas obrigava a rolar pra frente e pra trás pra
+                  fazer a única conferência que importa aqui. */}
+              {fotosPix.length > 0 && (
+                <View style={styles.linhaFotosPix}>
+                  {fotosPix.map((a) => (
+                    <Pressable key={a.id} onPress={() => setFotoAmpliada(a.id)}>
+                      {fotosDataUri[a.id] ? (
+                        <Image source={{ uri: fotosDataUri[a.id] }} style={styles.fotoPix} />
+                      ) : (
+                        <View style={[styles.fotoPix, styles.fotoPixVazia]} />
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              {editarPixNoQuadro && (
                 <Pressable
                   onPress={() => {
                     chave.definir(aprovacao.chave_pix ?? '')
@@ -860,7 +898,9 @@ export default function TelaDetalheSolicitacao() {
                   }}
                   hitSlop={8}
                 >
-                  <Text style={styles.linkPix}>Editar chave PIX</Text>
+                  <Text style={styles.linkPix}>
+                    {aprovacao.chave_pix ? 'Editar chave PIX' : 'Informar chave PIX'}
+                  </Text>
                 </Pressable>
               )}
             </View>
@@ -870,18 +910,6 @@ export default function TelaDetalheSolicitacao() {
               DEPOIS da solicitação -- o frentista foi buscar o QR, o dono
               não estava, o sinal caiu na hora de digitar. Antes disso a
               única saída era pedir pra gestão digitar por ele. */}
-          {!aprovacao.chave_pix && !editandoPix && podeInformarPix && !podeCompletarAbastecimento && (
-            <View style={styles.blocoPix}>
-              <Text style={styles.rotuloPix}>Chave PIX</Text>
-              <Text style={styles.dicaPix}>
-                Ainda não informada. Sem ela a gestão não tem para onde pagar.
-              </Text>
-              <Pressable onPress={() => setEditandoPix(true)} hitSlop={8}>
-                <Text style={styles.linkPix}>Informar chave PIX</Text>
-              </Pressable>
-            </View>
-          )}
-
           {editandoPix && (
             <View style={styles.blocoPix}>
               <Text style={styles.rotuloPix}>Chave PIX do recebedor</Text>
@@ -912,18 +940,6 @@ export default function TelaDetalheSolicitacao() {
             )}
             fotosDataUri={fotosDataUri}
             aoAbrir={setFotoAmpliada}
-          />
-
-          <SecaoAnexos
-            titulo="PIX do recebedor"
-            vazio="O motorista não anexou foto da chave."
-            anexos={anexos.filter((a) => a.tipo === 'PIX')}
-            fotosDataUri={fotosDataUri}
-            aoAbrir={setFotoAmpliada}
-            // Sem foto nenhuma e sem chave digitada não vale ocupar
-            // espaço com uma seção vazia -- não é um passo que alguém
-            // precise cumprir aqui.
-            oculta={!aprovacao.chave_pix && !anexos.some((a) => a.tipo === 'PIX')}
           />
 
           <SecaoAnexos
@@ -1195,6 +1211,9 @@ const styles = StyleSheet.create({
   chavePix: { fontSize: 17, fontWeight: '700', color: '#0f172a', marginTop: 6 },
   dicaPix: { fontSize: 12, color: '#64748b', marginTop: 6 },
   linkPix: { fontSize: 14, fontWeight: '700', color: '#0d9488', marginTop: 10 },
+  linhaFotosPix: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  fotoPix: { width: 84, height: 84, borderRadius: 8, backgroundColor: '#e2e8f0' },
+  fotoPixVazia: { borderWidth: 1, borderColor: '#e2e8f0' },
   painelLimite: {
     backgroundColor: '#fff',
     borderWidth: 1,
