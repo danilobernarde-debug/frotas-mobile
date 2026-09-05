@@ -109,7 +109,16 @@ export default function TelaDetalheSolicitacao() {
   const [limiteTexto, setLimiteTexto] = useState('')
   /** Formulário de conclusão do abastecimento (depois da bomba). */
   const [litros, setLitros] = useState('')
-  const [precoLitro, setPrecoLitro] = useState('')
+  /**
+   * Quanto foi PAGO, não o preço por litro.
+   *
+   * O motorista sabe de cor o que pagou -- é o valor que ele vai pedir no
+   * PIX. O preço por litro é o número pequeno da bomba, o que menos se
+   * olha e o que mais sai errado; e errar ali multiplica o erro pelo
+   * número de litros. Aqui ele é CALCULADO (pago ÷ litros), com as 4
+   * casas que a coluna preco_litro comporta.
+   */
+  const [valorPago, setValorPago] = useState('')
   const [tipoCombustivel, setTipoCombustivel] = useState('')
   const [odometro, setOdometro] = useState('')
   const [salvandoDados, setSalvandoDados] = useState(false)
@@ -151,7 +160,16 @@ export default function TelaDetalheSolicitacao() {
     aprovada &&
     aprovacao.status_pagamento !== 'PAGO' &&
     (ehMinha || (ehGestao && abastecimentoPreenchido))
-  const totalAbastecimento = paraNumero(litros) * paraNumero(precoLitro)
+  const litrosNum = paraNumero(litros)
+  const totalAbastecimento = paraNumero(valorPago)
+  const precoPorLitro = litrosNum > 0 ? totalAbastecimento / litrosNum : 0
+  /** O que ainda falta pra poder salvar -- vira o texto do botão, pra
+   *  ninguém tocar e ficar sem saber por que não aconteceu nada. */
+  const faltaNoAbastecimento = [
+    !tipoCombustivel && 'combustível',
+    litrosNum <= 0 && 'litros',
+    totalAbastecimento <= 0 && 'valor pago',
+  ].filter(Boolean) as string[]
 
   /** Câmera própria do app ou galeria, devolvendo só o uri do arquivo
    *  local. Comprovante e nota fiscal são documentos pra LER, então a
@@ -353,8 +371,11 @@ export default function TelaDetalheSolicitacao() {
     if (!aprovacao) return
     setSalvandoDados(true)
     const dados = {
-      litros: paraNumero(litros) || null,
-      preco_litro: paraNumero(precoLitro) || null,
+      litros: litrosNum || null,
+      // Derivado do que foi pago. 4 casas é o que a coluna guarda, e é
+      // precisão de sobra: o erro no total volta em menos de um centavo
+      // mesmo num tanque de caminhão.
+      preco_litro: precoPorLitro > 0 ? Number(precoPorLitro.toFixed(4)) : null,
       tipo_combustivel: tipoCombustivel || null,
       odometro: paraNumero(odometro) || null,
       valor: totalAbastecimento,
@@ -388,7 +409,7 @@ export default function TelaDetalheSolicitacao() {
       // digitado errado não pode obrigar a redigitar o resto.
       if (carregada) {
         setLitros(carregada.litros != null ? String(carregada.litros) : '')
-        setPrecoLitro(carregada.preco_litro != null ? String(carregada.preco_litro) : '')
+        setValorPago(carregada.valor > 0 ? String(carregada.valor) : '')
         setTipoCombustivel(carregada.tipo_combustivel ?? '')
         setOdometro(carregada.odometro != null ? String(carregada.odometro) : '')
       }
@@ -627,11 +648,15 @@ export default function TelaDetalheSolicitacao() {
               </Text>
               <Text style={styles.dicaPix}>
                 {ehMinha
-                  ? 'Informe o que a bomba marcou. É o que lança o abastecimento no controle de consumo do veículo.'
+                  ? 'Copie os números da bomba ou da nota. São 5 passos.'
                   : 'Ajuste o que o motorista informou errado. O lançamento no controle de consumo acompanha a correção.'}
               </Text>
 
-              <Text style={styles.rotuloCampo}>Combustível</Text>
+              {/* Numerado e com dica de onde achar cada número: quem
+                  preenche está em pé na bomba, com pressa, e nem sempre
+                  acostumado com formulário. Rótulo em forma de pergunta
+                  pede menos interpretação que um substantivo solto. */}
+              <Text style={styles.passo}>1. Qual combustível?</Text>
               <View style={styles.linhaChips}>
                 {TIPOS_COMBUSTIVEL.map((c) => (
                   <Pressable
@@ -644,7 +669,8 @@ export default function TelaDetalheSolicitacao() {
                 ))}
               </View>
 
-              <Text style={styles.rotuloCampo}>Litros</Text>
+              <Text style={styles.passo}>2. Quantos litros?</Text>
+              <Text style={styles.dicaCampo}>O número de LITROS que apareceu na bomba.</Text>
               <TextInput
                 style={styles.campo}
                 value={litros}
@@ -655,18 +681,31 @@ export default function TelaDetalheSolicitacao() {
                 placeholderTextColor="#94a3b8"
               />
 
-              <Text style={styles.rotuloCampo}>Preço por litro</Text>
+              <Text style={styles.passo}>3. Quanto deu?</Text>
+              <Text style={styles.dicaCampo}>
+                O valor total que você pagou -- o mesmo que vai pedir no PIX.
+              </Text>
               <TextInput
                 style={styles.campo}
-                value={precoLitro}
-                onChangeText={setPrecoLitro}
+                value={valorPago}
+                onChangeText={setValorPago}
                 keyboardType="decimal-pad"
                 inputAccessoryViewID={ID_BARRA_TECLADO}
-                placeholder="R$"
+                placeholder="Ex.: 250,00"
                 placeholderTextColor="#94a3b8"
               />
 
-              <Text style={styles.rotuloCampo}>KM do veículo</Text>
+              {/* Devolvido na hora, pra ele conferir contra a bomba sem
+                  precisar digitar: se o preço por litro sair estranho, um
+                  dos dois números acima está errado. */}
+              {precoPorLitro > 0 && (
+                <Text style={styles.contaFeita}>
+                  Deu {moeda(precoPorLitro)} por litro
+                </Text>
+              )}
+
+              <Text style={styles.passo}>4. KM do painel</Text>
+              <Text style={styles.dicaCampo}>O número grande do hodômetro, sem os decimais.</Text>
               <TextInput
                 style={styles.campo}
                 value={odometro}
@@ -677,20 +716,22 @@ export default function TelaDetalheSolicitacao() {
                 placeholderTextColor="#94a3b8"
               />
 
-              {totalAbastecimento > 0 && (
-                <Text style={styles.totalCalculado}>Total: {moeda(totalAbastecimento)}</Text>
-              )}
-
-              {/* Avisa, não bloqueia: o posto cobra o que cobra, e travar
-                  o motorista no posto não resolveria nada. O registro do
-                  teto fica pra conferência de quem paga. */}
-              {aprovacao.autorizado_valor != null && totalAbastecimento > aprovacao.autorizado_valor && (
-                <Text style={styles.avisoLimite}>
-                  Passou do autorizado ({moeda(aprovacao.autorizado_valor)}). Pode enviar assim mesmo,
-                  mas avise a gestão.
+              {/* O teto vira comparação, não aviso solto: ao lado do que
+                  ele acabou de digitar é onde a conta importa. */}
+              {aprovacao.autorizado_valor != null && totalAbastecimento > 0 && (
+                <Text
+                  style={
+                    totalAbastecimento > aprovacao.autorizado_valor
+                      ? styles.avisoLimite
+                      : styles.dentroDoLimite
+                  }
+                >
+                  {totalAbastecimento > aprovacao.autorizado_valor
+                    ? `Passou do autorizado (${moeda(aprovacao.autorizado_valor)}). Pode enviar assim mesmo, mas avise a gestão.`
+                    : `Dentro do autorizado (${moeda(aprovacao.autorizado_valor)}).`}
                 </Text>
               )}
-              {aprovacao.autorizado_litros != null && paraNumero(litros) > aprovacao.autorizado_litros && (
+              {aprovacao.autorizado_litros != null && litrosNum > aprovacao.autorizado_litros && (
                 <Text style={styles.avisoLimite}>
                   Passou do autorizado ({aprovacao.autorizado_litros.toLocaleString('pt-BR')} litros).
                   Pode enviar assim mesmo, mas avise a gestão.
@@ -701,48 +742,67 @@ export default function TelaDetalheSolicitacao() {
                   manda: elas são o registro de quem esteve lá, e não há o
                   que a gestão "corrija" numa foto de um posto onde não
                   esteve -- refazer, só voltando à bomba. */}
-              {ehMinha && <Text style={styles.rotuloCampo}>Fotos do abastecimento</Text>}
-              {/* Foto sobe no ato (anexarUri faz o upload na hora), número
-                  só com o botão -- e os dois no mesmo quadro faziam
-                  parecer que o botão salvava tudo. Dito aqui porque a
-                  dúvida já apareceu na prática. */}
               {ehMinha && (
-                <Text style={styles.dicaPix}>
-                  Cada foto é enviada assim que você tira. O botão abaixo salva só os números.
-                </Text>
+                <>
+                  <Text style={styles.passo}>5. Tire as 3 fotos</Text>
+                  <Text style={styles.dicaCampo}>
+                    Cada uma é enviada na hora. O botão do fim salva só os números.
+                  </Text>
+                  {SLOTS_ABASTECIMENTO.map((slot) => {
+                    const anexo = anexos.find((a) => a.tipo === slot.tipoFoto)
+                    const subindo = enviando === slot.tipoFoto
+                    // Miniatura, e não só um "✓": ele confere que
+                    // fotografou a coisa certa sem precisar abrir nada --
+                    // foto trocada entre hodômetro e placa só apareceria
+                    // pra quem paga, dias depois.
+                    const miniatura = anexo ? fotosDataUri[anexo.id] : undefined
+                    return (
+                      <Pressable
+                        key={slot.tipoFoto}
+                        onPress={() => perguntarFonte(slot.tipoFoto as TipoAnexo, slot.rotulo)}
+                        disabled={subindo}
+                        style={[styles.linhaFoto, anexo && styles.linhaFotoPronta]}
+                      >
+                        {miniatura ? (
+                          <Image source={{ uri: miniatura }} style={styles.miniaturaFoto} />
+                        ) : (
+                          <View style={styles.miniaturaVazia}>
+                            <Text style={styles.miniaturaVaziaTexto}>{anexo ? '✓' : '📷'}</Text>
+                          </View>
+                        )}
+                        <View style={styles.linhaFotoTextos}>
+                          <Text style={styles.linhaFotoTitulo}>{slot.rotulo}</Text>
+                          <Text style={anexo ? styles.linhaFotoOk : styles.linhaFotoPendente}>
+                            {subindo ? 'Enviando…' : anexo ? 'Enviada — toque para trocar' : 'Toque para tirar'}
+                          </Text>
+                        </View>
+                        {subindo && <ActivityIndicator color="#0d9488" size="small" />}
+                      </Pressable>
+                    )
+                  })}
+                </>
               )}
-              {ehMinha &&
-                SLOTS_ABASTECIMENTO.map((slot) => {
-                  const enviada = anexos.some((a) => a.tipo === slot.tipoFoto)
-                  const subindo = enviando === slot.tipoFoto
-                  return (
-                    <Pressable
-                      key={slot.tipoFoto}
-                      onPress={() => perguntarFonte(slot.tipoFoto as TipoAnexo, slot.rotulo)}
-                      disabled={subindo}
-                      style={[styles.botaoPix, (subindo || enviada) && styles.botaoDesabilitado]}
-                    >
-                      {subindo ? (
-                        <ActivityIndicator color="#fff" size="small" />
-                      ) : (
-                        <Text style={styles.botaoPixTexto}>
-                          {enviada ? `✓ ${slot.rotulo}` : `📷 ${slot.textoBotao}`}
-                        </Text>
-                      )}
-                    </Pressable>
-                  )
-                })}
 
+              {/* Diz o que falta em vez de só ficar apagado: botão
+                  desabilitado sem explicação faz a pessoa tocar de novo
+                  achando que o app travou. */}
               <Pressable
                 onPress={salvarDadosAbastecimento}
-                disabled={salvandoDados}
-                style={[styles.botaoSalvarLargo, salvandoDados && styles.botaoDesabilitado]}
+                disabled={salvandoDados || faltaNoAbastecimento.length > 0}
+                style={[
+                  styles.botaoSalvarLargo,
+                  (salvandoDados || faltaNoAbastecimento.length > 0) && styles.botaoDesabilitado,
+                ]}
               >
                 {salvandoDados ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
                   <Text style={styles.botaoPixTexto}>
-                    {ehMinha ? 'Salvar dados do abastecimento' : 'Salvar correção'}
+                    {faltaNoAbastecimento.length > 0
+                      ? `Falta preencher: ${faltaNoAbastecimento.join(', ')}`
+                      : ehMinha
+                        ? 'Salvar e enviar para a gestão'
+                        : 'Salvar correção'}
                   </Text>
                 )}
               </Pressable>
@@ -1121,6 +1181,40 @@ const styles = StyleSheet.create({
   avisoAutorizadoTitulo: { fontSize: 16, fontWeight: '800', color: '#92400e' },
   totalCalculado: { fontSize: 15, fontWeight: '700', color: '#0f766e', marginTop: 10 },
   rotuloCampo: { fontSize: 13, fontWeight: '700', color: '#334155', marginTop: 14 },
+  // Passo numerado, maior que um rótulo comum: é o que dá a sensação de
+  // sequência ("faz um, depois dois") em vez de um monte de campo junto.
+  passo: { fontSize: 16, fontWeight: '800', color: '#0f172a', marginTop: 20 },
+  dicaCampo: { fontSize: 13, color: '#64748b', marginTop: 4, lineHeight: 18 },
+  contaFeita: { fontSize: 14, fontWeight: '700', color: '#0f766e', marginTop: 8 },
+  dentroDoLimite: { fontSize: 13, fontWeight: '600', color: '#047857', marginTop: 8 },
+  // Linha de foto com miniatura, em vez de botão verde cheio: mostra o
+  // que foi enviado e deixa trocar com um toque.
+  linhaFoto: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 10,
+  },
+  linhaFotoPronta: { borderColor: '#6ee7b7', backgroundColor: '#f0fdf4' },
+  miniaturaFoto: { width: 56, height: 56, borderRadius: 8, backgroundColor: '#e2e8f0' },
+  miniaturaVazia: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniaturaVaziaTexto: { fontSize: 22 },
+  linhaFotoTextos: { flex: 1 },
+  linhaFotoTitulo: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+  linhaFotoOk: { fontSize: 12, color: '#047857', marginTop: 2 },
+  linhaFotoPendente: { fontSize: 12, color: '#64748b', marginTop: 2 },
   blocoObservacao: {
     backgroundColor: '#f8fafc',
     borderWidth: 1,
