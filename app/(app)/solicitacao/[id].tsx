@@ -358,10 +358,6 @@ export default function TelaDetalheSolicitacao() {
           {comprovantes.length > 0 && (
             <View style={styles.avisoPago}>
               <Text style={styles.avisoPagoTitulo}>✅ Pagamento confirmado</Text>
-              <Text style={styles.avisoPagoTexto}>
-                Comprovante anexado em {fmtData(comprovantes[comprovantes.length - 1].criado_em)}. Veja
-                abaixo, em "Comprovante de pagamento".
-              </Text>
             </View>
           )}
 
@@ -733,7 +729,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   avisoPagoTitulo: { fontSize: 16, fontWeight: '800', color: '#065f46' },
-  avisoPagoTexto: { fontSize: 13, color: '#047857', marginTop: 4, lineHeight: 18 },
   grade: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   fotoCartao: { width: '47%' },
   foto: { width: '100%', aspectRatio: 1, borderRadius: 10, backgroundColor: '#e2e8f0' },
