@@ -413,10 +413,13 @@ export default function TelaDetalheSolicitacao() {
       return
     }
     setAprovacao((a) => (a ? ({ ...a, ...dados } as Aprovacao) : a))
+    // Fecha o formulário e fica na solicitação, sem sair da tela. Antes
+    // saltava pro chat, o que atrapalhava justamente a correção: quem
+    // conserta um número quer conferir se ficou certo, e era jogado pra
+    // fora antes de ver o resultado. Fechado o formulário, os valores
+    // salvos aparecem na ficha logo acima -- e sair continua sendo a
+    // seta de voltar, como em qualquer outra tela.
     setCorrigindoAbastecimento(false)
-    // Volta pro chat: salvar aqui é o fim da tarefa que trouxe o
-    // motorista até esta tela, e é no chat que ele acompanha a resposta.
-    router.back()
   }
 
   useEffect(() => {
