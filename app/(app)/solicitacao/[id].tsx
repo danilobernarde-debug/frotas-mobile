@@ -320,7 +320,12 @@ export default function TelaDetalheSolicitacao() {
     const { error } = await supabase.from('frota_aprovacoes').update(campos).eq('id', aprovacao.id)
     setDecidindo(false)
     if (error) {
-      Alert.alert('Não consegui salvar', 'Tenta de novo em alguns segundos.')
+      // A mensagem do banco, não um "tenta de novo": nem todo erro aqui
+      // passa com o tempo. Coluna que falta, permissão negada e regra de
+      // trigger nunca melhoram esperando, e mandar esperar esconde a
+      // única informação que diz o que fazer (achado em teste real: o
+      // app pedia pra tentar de novo enquanto faltava uma migration).
+      Alert.alert('Não consegui salvar', error.message)
       return
     }
     setAprovacao({ ...aprovacao, ...campos, status: novoStatus } as Aprovacao)
