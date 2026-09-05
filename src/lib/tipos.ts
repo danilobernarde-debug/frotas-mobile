@@ -65,6 +65,10 @@ export interface Aprovacao {
   /** Chave PIX de quem recebe, digitada pelo motorista na criação
    *  (migration 0037 do frotas-web). Nula em solicitação antiga. */
   chave_pix: string | null
+  /** Teto que o gestor autorizou na aprovação -- um dos dois, ou nenhum
+   *  (aprovado sem limite). Ver 0041_abastecimento_autorizado.sql. */
+  autorizado_valor: number | null
+  autorizado_litros: number | null
   status: StatusAprovacao
   status_pagamento: StatusPagamento
   solicitante_id: string | null

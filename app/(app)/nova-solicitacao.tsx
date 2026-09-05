@@ -16,7 +16,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { FotoAmpliada } from '../../src/camera/FotoAmpliada'
 import { PreviaMarcaDagua } from '../../src/camera/PreviaMarcaDagua'
-import { SLOTS_ABASTECIMENTO } from '../../src/features/chat/fluxo'
 import { CampoChavePix } from '../../src/features/pix/CampoChavePix'
 import { useFormularioSolicitacao } from '../../src/features/chat/useFormularioSolicitacao'
 import { useVeiculos } from '../../src/features/veiculos/useVeiculos'
@@ -127,58 +126,18 @@ export default function TelaNovaSolicitacao() {
           )}
 
           {categoria === 'ABASTECIMENTO' ? (
-            <>
-              <Text style={styles.rotulo}>KM atual do veículo</Text>
-              <TextInput
-                style={styles.input}
-                value={formulario.odometro}
-                onChangeText={formulario.setOdometro}
-                keyboardType="decimal-pad"
-                placeholder="Ex.: 128500"
-                placeholderTextColor="#94a3b8"
-              />
-
-              <Text style={styles.rotulo}>Combustível</Text>
-              <View style={styles.listaVeiculos}>
-                {TIPOS_COMBUSTIVEL.map((c) => (
-                  <Pressable
-                    key={c}
-                    onPress={() => formulario.setTipoCombustivel(c)}
-                    style={[styles.chip, formulario.tipoCombustivel === c && styles.chipSelecionado]}
-                  >
-                    <Text style={[styles.chipTexto, formulario.tipoCombustivel === c && styles.chipTextoSelecionado]}>
-                      {c}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <Text style={styles.rotulo}>Litros</Text>
-              <TextInput
-                style={styles.input}
-                value={formulario.litros}
-                onChangeText={formulario.setLitros}
-                keyboardType="decimal-pad"
-                placeholder="Ex.: 40,5"
-                placeholderTextColor="#94a3b8"
-              />
-
-              <Text style={styles.rotulo}>Preço por litro</Text>
-              <TextInput
-                style={styles.input}
-                value={formulario.precoLitro}
-                onChangeText={formulario.setPrecoLitro}
-                keyboardType="decimal-pad"
-                placeholder="R$"
-                placeholderTextColor="#94a3b8"
-              />
-
-              {formulario.valorAbastecimento > 0 && (
-                <Text style={styles.valorCalculado}>
-                  Total: {moeda(formulario.valorAbastecimento)}
-                </Text>
-              )}
-            </>
+            /* Um pedido de abastecimento não tem o que preencher: quem
+               pede ainda não sabe quanto vai pôr, e KM, litros, preço e
+               as fotos da bomba só existem DEPOIS de abastecer. Pedir
+               isso aqui obrigava o motorista a já ter abastecido pra
+               conseguir pedir autorização. */
+            <View style={styles.explicacao}>
+              <Text style={styles.explicacaoTitulo}>É só pedir</Text>
+              <Text style={styles.explicacaoTexto}>
+                O gestor responde quanto você pode abastecer. Depois de abastecer, abra
+                esta solicitação e informe os litros, o preço e as fotos.
+              </Text>
+            </View>
           ) : (
             <>
               <Text style={styles.rotulo}>Descreva o problema</Text>
@@ -203,123 +162,108 @@ export default function TelaNovaSolicitacao() {
             </>
           )}
 
-          <Text style={styles.rotulo}>Fotos</Text>
-          <View style={styles.listaFotos}>
-            {categoria === 'ABASTECIMENTO'
-              ? SLOTS_ABASTECIMENTO.map((slot) => {
-                  const foto = formulario.fotos.find((f) => f.tipoFoto === slot.tipoFoto)
-                  return foto ? (
-                    <LinhaFotoPronta
-                      key={slot.tipoFoto}
-                      foto={foto}
-                      rotulo={slot.rotulo}
-                      nomeMotorista={formulario.motoristaNome}
-                      placa={formulario.veiculo?.placa}
-                      aoAbrir={() => setFotoAberta(foto.uriLocal)}
-                      aoTirarNovamente={() => formulario.tirarFotoSlot(slot.tipoFoto)}
-                    />
-                  ) : (
-                    <BotaoFoto
-                      key={slot.tipoFoto}
-                      onPress={() => formulario.tirarFotoSlot(slot.tipoFoto)}
-                      carregando={formulario.capturando}
-                      texto={slot.textoBotao}
-                    />
-                  )
-                })
-              : [
-                  ...formulario.fotosProblema.map((foto, indice) => (
-                    <LinhaFotoPronta
-                      key={foto.uriLocal}
-                      foto={foto}
-                      rotulo={`Foto ${indice + 1}`}
-                      nomeMotorista={formulario.motoristaNome}
-                      placa={formulario.veiculo?.placa}
-                      aoAbrir={() => setFotoAberta(foto.uriLocal)}
-                      aoTirarNovamente={() => formulario.substituirFotoMultipla(foto.uriLocal)}
-                    />
-                  )),
-                  <BotaoFoto
-                    key="tirar-foto"
-                    onPress={formulario.tirarFotoMultipla}
-                    carregando={formulario.capturando}
-                    texto={formulario.fotosProblema.length > 0 ? 'Tirar outra foto' : 'Tirar foto'}
-                  />,
-                ]}
-          </View>
+          {/* Fotos e PIX só na MANUTENÇÃO. No abastecimento os dois
+              pertencem ao depois: as fotos da bomba e do hodômetro só
+              existem com o carro abastecido, e a chave do recebedor o
+              motorista só vê quando chega no posto. Os dois aparecem na
+              tela da solicitação, na hora de completar. */}
+          {categoria !== 'ABASTECIMENTO' && (
+            <>
+            <Text style={styles.rotulo}>Fotos</Text>
+            <View style={styles.listaFotos}>
+              {formulario.fotosProblema.map((foto, indice) => (
+                <LinhaFotoPronta
+                  key={foto.uriLocal}
+                  foto={foto}
+                  rotulo={`Foto ${indice + 1}`}
+                  nomeMotorista={formulario.motoristaNome}
+                  placa={formulario.veiculo?.placa}
+                  aoAbrir={() => setFotoAberta(foto.uriLocal)}
+                  aoTirarNovamente={() => formulario.substituirFotoMultipla(foto.uriLocal)}
+                />
+              ))}
+              <BotaoFoto
+                onPress={formulario.tirarFotoMultipla}
+                carregando={formulario.capturando}
+                texto={formulario.fotosProblema.length > 0 ? 'Tirar outra foto' : 'Tirar foto'}
+              />
+            </View>
 
-          {/* Pagamento -- o posto/oficina quase nunca é fornecedor
-              cadastrado, então a chave vem na hora, com o motorista lá.
-              Os dois campos são opcionais de propósito: nem todo
-              recebedor mostra QR pra fotografar, e nem toda solicitação
-              já nasce com a chave em mãos. Quem paga confere a chave
-              digitada contra a foto. */}
-          <Text style={styles.tituloSecao}>Pagamento (PIX)</Text>
-          <Text style={styles.ajudaSecao}>
-            Aponte a câmera para o QR Code do recebedor: a foto sai sozinha e a
-            chave é preenchida sem digitar nada. Não tem QR? Tire a foto e
-            digite a chave abaixo.
-          </Text>
+            {/* Pagamento -- o posto/oficina quase nunca é fornecedor
+                cadastrado, então a chave vem na hora, com o motorista lá.
+                Os dois campos são opcionais de propósito: nem todo
+                recebedor mostra QR pra fotografar, e nem toda solicitação
+                já nasce com a chave em mãos. Quem paga confere a chave
+                digitada contra a foto. */}
+            <Text style={styles.tituloSecao}>Pagamento (PIX)</Text>
+            <Text style={styles.ajudaSecao}>
+              Aponte a câmera para o QR Code do recebedor: a foto sai sozinha e a
+              chave é preenchida sem digitar nada. Não tem QR? Tire a foto e
+              digite a chave abaixo.
+            </Text>
 
-          {/* A foto vem ANTES do campo de propósito: ela é que preenche a
-              chave. Pedir a chave primeiro convidava a digitar à mão o que
-              a câmera resolve sozinha um toque depois. */}
-          <Text style={styles.rotulo}>Foto da chave ou do QR Code</Text>
-          <View style={styles.listaFotos}>
-            {formulario.fotoPix ? (
-              <View style={styles.cartaoFotoPronta}>
-                <Pressable
-                  onPress={() => setFotoAberta(formulario.fotoPix!.uriLocal)}
-                  style={styles.miniaturaContainer}
-                >
-                  <Image
-                    source={{ uri: formulario.fotoPix.uriLocal }}
-                    style={styles.miniatura}
-                    resizeMode="cover"
-                  />
-                </Pressable>
-                <View style={styles.linhaFotoInfo}>
-                  <Text style={styles.fotoOk}>✓ Foto do PIX</Text>
-                  <View style={styles.acoesFoto}>
-                    <Pressable onPress={() => formulario.tirarFotoSlot('PIX')} hitSlop={8}>
-                      <Text style={styles.linkTirarNovo}>🔄 Tirar de novo</Text>
-                    </Pressable>
-                    <Pressable onPress={() => formulario.removerFotoSlot('PIX')} hitSlop={8}>
-                      <Text style={styles.linkRemover}>Remover</Text>
-                    </Pressable>
+            {/* A foto vem ANTES do campo de propósito: ela é que preenche a
+                chave. Pedir a chave primeiro convidava a digitar à mão o que
+                a câmera resolve sozinha um toque depois. */}
+            <Text style={styles.rotulo}>Foto da chave ou do QR Code</Text>
+            <View style={styles.listaFotos}>
+              {formulario.fotoPix ? (
+                <View style={styles.cartaoFotoPronta}>
+                  <Pressable
+                    onPress={() => setFotoAberta(formulario.fotoPix!.uriLocal)}
+                    style={styles.miniaturaContainer}
+                  >
+                    <Image
+                      source={{ uri: formulario.fotoPix.uriLocal }}
+                      style={styles.miniatura}
+                      resizeMode="cover"
+                    />
+                  </Pressable>
+                  <View style={styles.linhaFotoInfo}>
+                    <Text style={styles.fotoOk}>✓ Foto do PIX</Text>
+                    <View style={styles.acoesFoto}>
+                      <Pressable onPress={() => formulario.tirarFotoSlot('PIX')} hitSlop={8}>
+                        <Text style={styles.linkTirarNovo}>🔄 Tirar de novo</Text>
+                      </Pressable>
+                      <Pressable onPress={() => formulario.removerFotoSlot('PIX')} hitSlop={8}>
+                        <Text style={styles.linkRemover}>Remover</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
-              </View>
-            ) : (
-              <BotaoFoto
-                onPress={() => formulario.tirarFotoSlot('PIX')}
-                carregando={formulario.capturando}
-                texto="Ler QR Code ou tirar foto"
-              />
-            )}
-          </View>
+              ) : (
+                <BotaoFoto
+                  onPress={() => formulario.tirarFotoSlot('PIX')}
+                  carregando={formulario.capturando}
+                  texto="Ler QR Code ou tirar foto"
+                />
+              )}
+            </View>
 
-          {/* Um campo só, sem escolher o tipo: a pontuação e o tipo saem
-              sozinhos do que foi digitado. Mesmo componente da tela da
-              solicitação já enviada, onde a chave pode ser completada
-              depois -- chave tratada de dois jeitos diferentes é o tipo
-              de divergência que acaba em pagamento errado. */}
-          <Text style={styles.rotulo}>Chave PIX</Text>
-          <CampoChavePix chave={formulario.chavePix} />
-          {/* O motorista precisa saber de onde veio o que está no campo --
-              principalmente pra conferir antes de enviar, já que é pra
-              onde o dinheiro vai. */}
-          {formulario.origemChavePix === 'qr' && (
-            <Text style={styles.avisoBom}>✓ Chave lida do QR Code. Confira antes de enviar.</Text>
+            {/* Um campo só, sem escolher o tipo: a pontuação e o tipo saem
+                sozinhos do que foi digitado. Mesmo componente da tela da
+                solicitação já enviada, onde a chave pode ser completada
+                depois -- chave tratada de dois jeitos diferentes é o tipo
+                de divergência que acaba em pagamento errado. */}
+            <Text style={styles.rotulo}>Chave PIX</Text>
+            <CampoChavePix chave={formulario.chavePix} />
+            {/* O motorista precisa saber de onde veio o que está no campo --
+                principalmente pra conferir antes de enviar, já que é pra
+                onde o dinheiro vai. */}
+            {formulario.origemChavePix === 'qr' && (
+              <Text style={styles.avisoBom}>✓ Chave lida do QR Code. Confira antes de enviar.</Text>
+            )}
+            {formulario.origemChavePix === 'qr-dinamico' && (
+              <Text style={styles.aviso}>
+                Esse QR Code é de cobrança e não contém a chave. Digite a chave acima.
+              </Text>
+            )}
+            {formulario.origemChavePix === 'qr-sem-chave' && (
+              <Text style={styles.aviso}>Não achei um QR Code de PIX na foto. Digite a chave acima.</Text>
+            )}
+            </>
           )}
-          {formulario.origemChavePix === 'qr-dinamico' && (
-            <Text style={styles.aviso}>
-              Esse QR Code é de cobrança e não contém a chave. Digite a chave acima.
-            </Text>
-          )}
-          {formulario.origemChavePix === 'qr-sem-chave' && (
-            <Text style={styles.aviso}>Não achei um QR Code de PIX na foto. Digite a chave acima.</Text>
-          )}
+
         </ScrollView>
 
         <View style={styles.rodape}>
@@ -461,6 +405,16 @@ const styles = StyleSheet.create({
   inputMultilinha: { height: 90, paddingTop: 12, textAlignVertical: 'top' },
   valorCalculado: { marginTop: 10, fontSize: 15, fontWeight: '700', color: '#0f766e' },
   listaVeiculos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  explicacao: {
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+  },
+  explicacaoTitulo: { fontSize: 15, fontWeight: '800', color: '#0f766e' },
+  explicacaoTexto: { fontSize: 13, color: '#115e59', marginTop: 4, lineHeight: 19 },
   vazio: { color: '#94a3b8', fontStyle: 'italic' },
   veiculoEscolhido: {
     flexDirection: 'row',

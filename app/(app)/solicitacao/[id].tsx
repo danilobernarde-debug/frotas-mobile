@@ -1,6 +1,17 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../../../src/auth/useAuth'
 import { capturarFoto, capturarFotoComQr, removerFotoLocal } from '../../../src/camera/capturarFoto'
@@ -11,7 +22,16 @@ import { data as fmtData, moeda } from '../../../src/lib/formato'
 import { lerChavePix } from '../../../src/lib/pixBrCode'
 import { enviarAnexo, urlAnexo } from '../../../src/lib/api'
 import { supabase } from '../../../src/lib/supabase'
-import type { AnexoAprovacao, Aprovacao, TipoAnexo } from '../../../src/lib/tipos'
+import { SLOTS_ABASTECIMENTO } from '../../../src/features/chat/fluxo'
+import { TIPOS_COMBUSTIVEL, type AnexoAprovacao, type Aprovacao, type TipoAnexo } from '../../../src/lib/tipos'
+
+/** Aceita vírgula decimal, como o teclado brasileiro oferece. */
+function paraNumero(texto: string): number {
+  const limpo = texto.trim()
+  if (!limpo) return 0
+  const n = Number(limpo.includes(',') ? limpo.replace(/\./g, '').replace(',', '.') : limpo)
+  return Number.isFinite(n) ? n : 0
+}
 
 const ROTULO_STATUS: Record<string, string> = {
   PENDENTE: 'Pendente',
@@ -75,6 +95,17 @@ export default function TelaDetalheSolicitacao() {
   /** Formulário da chave PIX aberto (o motorista tocou em "Informar
    *  chave PIX"). Fechado por padrão: quem já mandou a chave na criação
    *  não precisa ver campo nenhum aqui. */
+  /** Painel de aprovação aberto (o ADMIN tocou em "Aprovar") -- é onde
+   *  ele informa quanto o motorista pode abastecer. */
+  const [aprovando, setAprovando] = useState(false)
+  const [limiteEm, setLimiteEm] = useState<'VALOR' | 'LITROS'>('VALOR')
+  const [limiteTexto, setLimiteTexto] = useState('')
+  /** Formulário de conclusão do abastecimento (depois da bomba). */
+  const [litros, setLitros] = useState('')
+  const [precoLitro, setPrecoLitro] = useState('')
+  const [tipoCombustivel, setTipoCombustivel] = useState('')
+  const [odometro, setOdometro] = useState('')
+  const [salvandoDados, setSalvandoDados] = useState(false)
   const [editandoPix, setEditandoPix] = useState(false)
   const [salvandoPix, setSalvandoPix] = useState(false)
   const chave = useChavePix()
@@ -95,6 +126,19 @@ export default function TelaDetalheSolicitacao() {
    * cortesia de não oferecer um caminho que o banco recusaria.
    */
   const podeInformarPix = ehMinha && aprovacao?.status_pagamento !== 'PAGO'
+  /**
+   * Quem esteve na bomba é o motorista, mas a gestão também lança (chega
+   * nota por e-mail, ou o motorista liga ditando os números) -- pedido do
+   * usuário: "coloca a opção para os dois preencherem". Trava depois de
+   * pago, mesma razão da chave PIX: os números que justificaram o valor
+   * não mudam depois do dinheiro sair.
+   */
+  const podeCompletarAbastecimento =
+    aprovacao?.categoria === 'ABASTECIMENTO' &&
+    aprovada &&
+    aprovacao.status_pagamento !== 'PAGO' &&
+    (ehMinha || ehGestao)
+  const totalAbastecimento = paraNumero(litros) * paraNumero(precoLitro)
 
   /** Câmera própria do app ou galeria, devolvendo só o uri do arquivo
    *  local. Comprovante e nota fiscal são documentos pra LER, então a
@@ -257,13 +301,53 @@ export default function TelaDetalheSolicitacao() {
     // Update direto, igual o Server Action decidirAprovacao do painel web
     // faz -- é só isso mesmo, o resto (quem decidiu, quando, status de
     // pagamento inicial) é trigger no banco (0001_schema.sql:628-650).
-    const { error } = await supabase.from('frota_aprovacoes').update({ status: novoStatus }).eq('id', aprovacao.id)
+    // O limite acompanha só a aprovação, e só se foi informado: aprovar
+    // sem preencher nada continua valendo ("pode abastecer, sem teto"), e
+    // é como fica toda solicitação anterior a este campo existir.
+    const limite = paraNumero(limiteTexto)
+    const campos: Record<string, unknown> = { status: novoStatus }
+    if (novoStatus === 'APROVADO' && limite > 0) {
+      campos.autorizado_valor = limiteEm === 'VALOR' ? limite : null
+      campos.autorizado_litros = limiteEm === 'LITROS' ? limite : null
+    }
+
+    const { error } = await supabase.from('frota_aprovacoes').update(campos).eq('id', aprovacao.id)
     setDecidindo(false)
     if (error) {
       Alert.alert('Não consegui salvar', 'Tenta de novo em alguns segundos.')
       return
     }
-    setAprovacao({ ...aprovacao, status: novoStatus })
+    setAprovacao({ ...aprovacao, ...campos, status: novoStatus } as Aprovacao)
+    setAprovando(false)
+    setLimiteTexto('')
+  }
+
+  /**
+   * Conclusão do abastecimento: o que só se sabe depois da bomba.
+   *
+   * `valor` vai junto porque é litros x preço -- sem isso a solicitação
+   * mostraria um total que não bate com os próprios números. É também o
+   * salvamento que faz o lançamento em frota_abastecimentos acontecer: a
+   * trigger da 0041 dispara quando a linha fica completa, não na
+   * aprovação (que aqui vem antes dos dados existirem).
+   */
+  async function salvarDadosAbastecimento() {
+    if (!aprovacao) return
+    setSalvandoDados(true)
+    const dados = {
+      litros: paraNumero(litros) || null,
+      preco_litro: paraNumero(precoLitro) || null,
+      tipo_combustivel: tipoCombustivel || null,
+      odometro: paraNumero(odometro) || null,
+      valor: totalAbastecimento,
+    }
+    const { error } = await supabase.from('frota_aprovacoes').update(dados).eq('id', aprovacao.id)
+    setSalvandoDados(false)
+    if (error) {
+      Alert.alert('Não consegui salvar', error.message)
+      return
+    }
+    setAprovacao((a) => (a ? ({ ...a, ...dados } as Aprovacao) : a))
   }
 
   useEffect(() => {
@@ -280,7 +364,16 @@ export default function TelaDetalheSolicitacao() {
       ])
       if (cancelado) return
       setToken(sessao.session?.access_token ?? null)
-      setAprovacao((respostaAprovacao.data as Aprovacao) ?? null)
+      const carregada = (respostaAprovacao.data as Aprovacao) ?? null
+      setAprovacao(carregada)
+      // Campos já preenchidos voltam pro formulário -- corrigir um preço
+      // digitado errado não pode obrigar a redigitar o resto.
+      if (carregada) {
+        setLitros(carregada.litros != null ? String(carregada.litros) : '')
+        setPrecoLitro(carregada.preco_litro != null ? String(carregada.preco_litro) : '')
+        setTipoCombustivel(carregada.tipo_combustivel ?? '')
+        setOdometro(carregada.odometro != null ? String(carregada.odometro) : '')
+      }
       setAnexos((respostaAnexos.data as AnexoAprovacao[]) ?? [])
       setCarregando(false)
     }
@@ -361,7 +454,7 @@ export default function TelaDetalheSolicitacao() {
             </View>
           )}
 
-          {perfil?.papel === 'ADMIN' && aprovacao.status === 'PENDENTE' && (
+          {perfil?.papel === 'ADMIN' && aprovacao.status === 'PENDENTE' && !aprovando && (
             <View style={styles.decisao}>
               <Pressable
                 onPress={() => decidir('REPROVADO')}
@@ -371,12 +464,77 @@ export default function TelaDetalheSolicitacao() {
                 <Text style={styles.botaoDecisaoTexto}>Reprovar</Text>
               </Pressable>
               <Pressable
-                onPress={() => decidir('APROVADO')}
+                // No abastecimento, aprovar é responder QUANTO -- abre o
+                // painel em vez de decidir na hora. Nas outras categorias
+                // não há teto a informar, então aprova direto.
+                onPress={() =>
+                  aprovacao.categoria === 'ABASTECIMENTO' ? setAprovando(true) : decidir('APROVADO')
+                }
                 disabled={decidindo}
                 style={[styles.botaoDecisao, styles.botaoAprovar, decidindo && styles.botaoDesabilitado]}
               >
                 {decidindo ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.botaoDecisaoTexto}>Aprovar</Text>}
               </Pressable>
+            </View>
+          )}
+
+          {/* Painel inline, não um Modal: esta tela já tem o Modal da foto
+              ampliada, e dois Modal do RN abertos juntos travam o iOS. */}
+          {aprovando && (
+            <View style={styles.painelLimite}>
+              <Text style={styles.painelTitulo}>Quanto ele pode abastecer?</Text>
+              <View style={styles.linhaChips}>
+                {(['VALOR', 'LITROS'] as const).map((t) => (
+                  <Pressable
+                    key={t}
+                    onPress={() => setLimiteEm(t)}
+                    style={[styles.chip, limiteEm === t && styles.chipAtivo]}
+                  >
+                    <Text style={[styles.chipTexto, limiteEm === t && styles.chipTextoAtivo]}>
+                      {t === 'VALOR' ? 'Em reais' : 'Em litros'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput
+                style={styles.campo}
+                value={limiteTexto}
+                onChangeText={setLimiteTexto}
+                keyboardType="decimal-pad"
+                placeholder={limiteEm === 'VALOR' ? 'R$ 300,00' : '40 litros'}
+                placeholderTextColor="#94a3b8"
+              />
+              <Text style={styles.dicaPix}>
+                Deixe em branco para aprovar sem limite.
+              </Text>
+              <View style={styles.acoesPix}>
+                <Pressable onPress={() => setAprovando(false)} hitSlop={8} disabled={decidindo}>
+                  <Text style={styles.linkPixFraco}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => decidir('APROVADO')}
+                  disabled={decidindo}
+                  style={[styles.botaoSalvarPix, decidindo && styles.botaoDesabilitado]}
+                >
+                  {decidindo ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.botaoPixTexto}>Aprovar</Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* O teto autorizado é a resposta que o motorista foi buscar --
+              fica em destaque, não numa linha da ficha. */}
+          {aprovada && (aprovacao.autorizado_valor != null || aprovacao.autorizado_litros != null) && (
+            <View style={styles.avisoAutorizado}>
+              <Text style={styles.avisoAutorizadoTitulo}>
+                {aprovacao.autorizado_valor != null
+                  ? `Autorizado até ${moeda(aprovacao.autorizado_valor)}`
+                  : `Autorizado até ${aprovacao.autorizado_litros?.toLocaleString('pt-BR')} litros`}
+              </Text>
             </View>
           )}
 
@@ -416,6 +574,113 @@ export default function TelaDetalheSolicitacao() {
             <View style={styles.linha}>
               <Text style={styles.rotulo}>Total</Text>
               <Text style={styles.valor}>{moeda(aprovacao.valor)}</Text>
+            </View>
+          )}
+
+          {podeCompletarAbastecimento && (
+            <View style={styles.painelLimite}>
+              <Text style={styles.painelTitulo}>Depois de abastecer</Text>
+              <Text style={styles.dicaPix}>
+                Informe o que a bomba marcou. É o que lança o abastecimento no controle de
+                consumo do veículo.
+              </Text>
+
+              <Text style={styles.rotuloCampo}>Combustível</Text>
+              <View style={styles.linhaChips}>
+                {TIPOS_COMBUSTIVEL.map((c) => (
+                  <Pressable
+                    key={c}
+                    onPress={() => setTipoCombustivel(c)}
+                    style={[styles.chip, tipoCombustivel === c && styles.chipAtivo]}
+                  >
+                    <Text style={[styles.chipTexto, tipoCombustivel === c && styles.chipTextoAtivo]}>{c}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={styles.rotuloCampo}>Litros</Text>
+              <TextInput
+                style={styles.campo}
+                value={litros}
+                onChangeText={setLitros}
+                keyboardType="decimal-pad"
+                placeholder="Ex.: 40,5"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.rotuloCampo}>Preço por litro</Text>
+              <TextInput
+                style={styles.campo}
+                value={precoLitro}
+                onChangeText={setPrecoLitro}
+                keyboardType="decimal-pad"
+                placeholder="R$"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.rotuloCampo}>KM do veículo</Text>
+              <TextInput
+                style={styles.campo}
+                value={odometro}
+                onChangeText={setOdometro}
+                keyboardType="decimal-pad"
+                placeholder="Ex.: 128500"
+                placeholderTextColor="#94a3b8"
+              />
+
+              {totalAbastecimento > 0 && (
+                <Text style={styles.totalCalculado}>Total: {moeda(totalAbastecimento)}</Text>
+              )}
+
+              {/* Avisa, não bloqueia: o posto cobra o que cobra, e travar
+                  o motorista no posto não resolveria nada. O registro do
+                  teto fica pra conferência de quem paga. */}
+              {aprovacao.autorizado_valor != null && totalAbastecimento > aprovacao.autorizado_valor && (
+                <Text style={styles.avisoLimite}>
+                  Passou do autorizado ({moeda(aprovacao.autorizado_valor)}). Pode enviar assim mesmo,
+                  mas avise a gestão.
+                </Text>
+              )}
+              {aprovacao.autorizado_litros != null && paraNumero(litros) > aprovacao.autorizado_litros && (
+                <Text style={styles.avisoLimite}>
+                  Passou do autorizado ({aprovacao.autorizado_litros.toLocaleString('pt-BR')} litros).
+                  Pode enviar assim mesmo, mas avise a gestão.
+                </Text>
+              )}
+
+              <Text style={styles.rotuloCampo}>Fotos do abastecimento</Text>
+              {SLOTS_ABASTECIMENTO.map((slot) => {
+                const enviada = anexos.some((a) => a.tipo === slot.tipoFoto)
+                const subindo = enviando === slot.tipoFoto
+                return (
+                  <Pressable
+                    key={slot.tipoFoto}
+                    onPress={() => perguntarFonte(slot.tipoFoto as TipoAnexo, slot.rotulo)}
+                    disabled={subindo}
+                    style={[styles.botaoPix, (subindo || enviada) && styles.botaoDesabilitado]}
+                  >
+                    {subindo ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.botaoPixTexto}>
+                        {enviada ? `✓ ${slot.rotulo}` : `📷 ${slot.textoBotao}`}
+                      </Text>
+                    )}
+                  </Pressable>
+                )
+              })}
+
+              <Pressable
+                onPress={salvarDadosAbastecimento}
+                disabled={salvandoDados}
+                style={[styles.botaoSalvarLargo, salvandoDados && styles.botaoDesabilitado]}
+              >
+                {salvandoDados ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.botaoPixTexto}>Salvar dados do abastecimento</Text>
+                )}
+              </Pressable>
             </View>
           )}
 
@@ -701,6 +966,59 @@ const styles = StyleSheet.create({
   chavePix: { fontSize: 17, fontWeight: '700', color: '#0f172a', marginTop: 6 },
   dicaPix: { fontSize: 12, color: '#64748b', marginTop: 6 },
   linkPix: { fontSize: 14, fontWeight: '700', color: '#0d9488', marginTop: 10 },
+  painelLimite: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+  },
+  painelTitulo: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
+  linhaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  chip: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  chipAtivo: { backgroundColor: '#0d9488', borderColor: '#0d9488' },
+  chipTexto: { fontSize: 14, fontWeight: '600', color: '#334155' },
+  chipTextoAtivo: { color: '#fff' },
+  campo: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#0f172a',
+    marginTop: 10,
+  },
+  // Amarelo, não verde: é instrução ("você pode gastar até X"), não
+  // confirmação de algo concluído -- o verde da tela já é do pagamento.
+  avisoAutorizado: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+  },
+  avisoAutorizadoTitulo: { fontSize: 16, fontWeight: '800', color: '#92400e' },
+  totalCalculado: { fontSize: 15, fontWeight: '700', color: '#0f766e', marginTop: 10 },
+  rotuloCampo: { fontSize: 13, fontWeight: '700', color: '#334155', marginTop: 14 },
+  avisoLimite: { fontSize: 13, fontWeight: '600', color: '#b45309', marginTop: 8, lineHeight: 18 },
+  botaoSalvarLargo: {
+    backgroundColor: '#0d9488',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 16,
+  },
   linkPixFraco: { fontSize: 14, fontWeight: '600', color: '#64748b' },
   botaoPix: {
     backgroundColor: '#0d9488',

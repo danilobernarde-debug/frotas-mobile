@@ -195,12 +195,14 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
       veiculoId: veiculo.id,
       categoria,
       servico: ehAbastecimento ? 'Abastecimento' : descricao,
-      valor: ehAbastecimento ? valorAbastecimento : paraNumero(valor),
-      odometro: ehAbastecimento ? paraNumero(odometro) : null,
+      // Abastecimento nasce sem valor: quanto pode gastar é o gestor quem
+      // responde na aprovação, e quanto foi de fato só se sabe na bomba.
+      valor: ehAbastecimento ? 0 : paraNumero(valor),
+      odometro: null,
       motoristaId: perfil?.motorista_id ?? null,
-      litros: ehAbastecimento ? paraNumero(litros) : null,
-      precoLitro: ehAbastecimento ? paraNumero(precoLitro) : null,
-      tipoCombustivel: ehAbastecimento ? tipoCombustivel : null,
+      litros: null,
+      precoLitro: null,
+      tipoCombustivel: null,
       // Sem pontuação e com o "+55" do celular: é assim que a chave está
       // registrada no Banco Central. Mandar a versão formatada da tela
       // quebraria o pagamento do outro lado.
@@ -226,15 +228,14 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   const fotosProblema = fotos.filter((f) => f.tipoFoto === 'PROBLEMA')
   const fotoPix = fotos.find((f) => f.tipoFoto === 'PIX') ?? null
 
+  // ABASTECIMENTO pede só o veículo. Antes exigia litros, preço, KM e as
+  // 3 fotos -- dados que só existem DEPOIS de abastecer, o que fazia da
+  // "solicitação" um lançamento do que já tinha acontecido. Quem pede
+  // ainda não sabe quanto vai pôr: é justamente isso que o gestor
+  // responde ao aprovar. O resto é preenchido na tela da solicitação,
+  // depois da bomba.
   const podeEnviar = Boolean(
-    veiculo &&
-      (categoria !== 'MANUTENÇÃO' || (descricao.trim() && fotosProblema.length > 0)) &&
-      (categoria !== 'ABASTECIMENTO' ||
-        (paraNumero(odometro) > 0 &&
-          paraNumero(litros) > 0 &&
-          paraNumero(precoLitro) > 0 &&
-          tipoCombustivel !== '' &&
-          SLOTS_ABASTECIMENTO.every((s) => fotos.some((f) => f.tipoFoto === s.tipoFoto)))),
+    veiculo && (categoria !== 'MANUTENÇÃO' || (descricao.trim() && fotosProblema.length > 0)),
   )
 
   return {
