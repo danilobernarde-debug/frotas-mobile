@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { obterLocalizacaoAtual, type LocalCapturado } from '../lib/localizacao'
-import { capturarFoto } from './capturarFoto'
+import { capturarFoto, capturarFotoComQr } from './capturarFoto'
 import type { ContextoMarcaDagua } from './CameraCustomizada'
 
 export interface FotoComLocal {
@@ -9,6 +9,9 @@ export interface FotoComLocal {
   latitude?: number
   longitude?: number
   localizacaoRotulo?: string
+  /** Só quando capturar() foi chamado com `lerQrCode`: conteúdo do QR
+   *  Code reconhecido no visor. null = não havia QR na frente. */
+  codigoQr?: string | null
 }
 
 /**
@@ -70,6 +73,7 @@ export function useCapturaComLocal() {
   async function capturar(
     aoLocalizar?: (uri: string, local: LocalCapturado | null) => void,
     marcaDagua?: ContextoMarcaDagua,
+    opcoes?: { lerQrCode?: boolean },
   ): Promise<FotoComLocal | null> {
     setCapturando(true)
     // Localização entra aqui, não em quem chama -- localAtual já é o
@@ -83,9 +87,15 @@ export function useCapturaComLocal() {
       longitude: localAtual?.longitude,
       localizacaoRotulo: localAtual?.rotulo ?? undefined,
     }
-    const uri = await capturarFoto(marcaDaguaCompleta)
+    // Duas câmeras diferentes só no leitor de QR ligado -- todo o resto
+    // (marca d'água, compressão, cópia pra pasta persistente) é o mesmo
+    // caminho nos dois casos.
+    const capturada = opcoes?.lerQrCode
+      ? await capturarFotoComQr(marcaDaguaCompleta)
+      : await capturarFoto(marcaDaguaCompleta).then((uri) => (uri ? { uriLocal: uri, codigoQr: null } : null))
     setCapturando(false)
-    if (!uri) return null
+    if (!capturada) return null
+    const uri = capturada.uriLocal
 
     const capturadaEm = new Date().toISOString()
 
@@ -108,6 +118,7 @@ export function useCapturaComLocal() {
       latitude: localAtual?.latitude,
       longitude: localAtual?.longitude,
       localizacaoRotulo: localAtual?.rotulo ?? undefined,
+      codigoQr: capturada.codigoQr,
     }
   }
 

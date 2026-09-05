@@ -2,6 +2,13 @@ import { scanFromURLAsync } from 'expo-camera'
 import { useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
 import { useCapturaComLocal } from '../../camera/useCapturaComLocal'
+import {
+  ajustarTipoDigitando,
+  formatarChavePix,
+  formatarChaveRecebida,
+  limparChavePix,
+  type TipoChavePix,
+} from '../../lib/chavePix'
 import { lerChavePix } from '../../lib/pixBrCode'
 import type { CategoriaSolicitacao, Veiculo } from '../../lib/tipos'
 import { TIPO_NOVA_SOLICITACAO, type FotoPayload, type NovaSolicitacaoPayload } from '../../outbox/handlers/novaSolicitacao'
@@ -42,7 +49,14 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   const [litros, setLitros] = useState('')
   const [precoLitro, setPrecoLitro] = useState('')
   const [tipoCombustivel, setTipoCombustivel] = useState('')
+  /** Guarda a chave JÁ FORMATADA (com pontuação) -- é o que aparece no
+   *  campo. A versão sem pontuação só é montada no envio, por
+   *  limparChavePix(). */
   const [chavePix, setChavePix] = useState('')
+  /** Tipo escolhido nos botões da tela: é ele que decide a máscara. CPF e
+   *  celular têm os mesmos 11 dígitos, então não dá pra deduzir do que
+   *  foi digitado -- tem que ser escolha explícita, como no app do banco. */
+  const [tipoChavePix, setTipoChavePix] = useState<TipoChavePix>('CPF')
   /** Como a chave atual chegou no campo -- só pra tela poder explicar
    *  ("lida do QR Code") ou avisar que o QR não trazia chave. Volta a
    *  'digitada' assim que o motorista edita o campo na mão. */
@@ -81,35 +95,54 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   const marcaDagua = { nomeMotorista: perfil?.motoristaNome, placa: veiculo?.placa }
 
   async function tirarFotoSlot(tipoFoto: string) {
+    const ehPix = tipoFoto === 'PIX'
     // A foto do PIX sai sem a faixa da marca d'água (nem no visor, nem
     // carimbada no servidor -- ver TIPOS_COM_MARCA_DAGUA na rota de
     // anexos): ela existe pra ser LIDA, chave ou QR code, e tanto a
     // barra do rodapé quanto o QR que o carimbo desenha no canto
     // atrapalhariam justamente isso.
-    const foto = await capturar(completarLocal, tipoFoto === 'PIX' ? undefined : marcaDagua)
+    //
+    // Só ela também abre a câmera com o leitor de QR ligado: a foto
+    // dispara sozinha quando o código entra no visor.
+    const foto = await capturar(completarLocal, ehPix ? undefined : marcaDagua, { lerQrCode: ehPix })
     if (!foto) return
-    setFotos((atual) => [...atual.filter((f) => f.tipoFoto !== tipoFoto), { tipoFoto, ...foto }])
-    if (tipoFoto === 'PIX') await preencherChaveDoQr(foto.uriLocal)
+    // codigoQr fica fora do que é guardado: é dado de leitura, não da
+    // foto -- vira chave logo abaixo e não precisa acompanhar o anexo.
+    const { codigoQr, ...dadosFoto } = foto
+    setFotos((atual) => [...atual.filter((f) => f.tipoFoto !== tipoFoto), { tipoFoto, ...dadosFoto }])
+    if (ehPix) await preencherChaveDoQr(dadosFoto.uriLocal, codigoQr)
   }
 
   /**
-   * Tenta ler um QR Code na foto do PIX recém-tirada e preencher a chave
-   * sozinha. Nunca falha o fluxo: se não houver QR, se for QR de outra
-   * coisa, ou se o leitor der erro, a foto continua anexada e o campo
-   * continua como estava -- é conveniência, não etapa obrigatória.
+   * Preenche a chave a partir do QR Code, por dois caminhos, nesta ordem:
+   *
+   *   1. `codigoDoVisor` -- o leitor da própria câmera já reconheceu o
+   *      código ao vivo, antes da foto existir. É o caminho normal e o
+   *      confiável: o visor fica tentando quadro a quadro até acertar o
+   *      foco, então praticamente não erra.
+   *   2. relendo a imagem salva -- só quando o visor não pegou nada (o
+   *      motorista apertou o botão antes do leitor travar no código).
+   *      Foto de tela de celular tem reflexo e desfoque, então aqui a
+   *      chance de sucesso é bem menor; serve de rede, não de plano A.
+   *
+   * Nunca falha o fluxo: se não houver QR, se for QR de outra coisa, ou
+   * se o leitor der erro, a foto continua anexada e o campo continua como
+   * estava -- é conveniência, não etapa obrigatória.
    *
    * Só preenche quando o campo está vazio. Se o motorista já digitou algo,
    * o que ele escreveu vale mais do que o que a máquina leu -- sobrescrever
    * seria trocar um dado conferido por um adivinhado, e aqui o dado é pra
    * onde o dinheiro vai.
    */
-  async function preencherChaveDoQr(uri: string) {
-    let conteudo: string | undefined
-    try {
-      const encontrados = await scanFromURLAsync(uri, ['qr'])
-      conteudo = encontrados[0]?.data
-    } catch {
-      return // leitor não conseguiu abrir a imagem -- segue sem avisar nada
+  async function preencherChaveDoQr(uri: string, codigoDoVisor?: string | null) {
+    let conteudo = codigoDoVisor ?? undefined
+    if (!conteudo) {
+      try {
+        const encontrados = await scanFromURLAsync(uri, ['qr'])
+        conteudo = encontrados[0]?.data
+      } catch {
+        return // leitor não conseguiu abrir a imagem -- segue sem avisar nada
+      }
     }
     if (!conteudo) return
 
@@ -118,7 +151,11 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
       // QR dá a chave em dado digital, não em leitura de imagem -- não há
       // risco de trocar dígito, diferente de tentar ler texto de uma foto.
       if (!chavePix.trim()) {
-        setChavePix(resultado.chave)
+        // Vem sem ambiguidade (celular sempre com +55 no BR Code), então
+        // aqui dá pra acertar o tipo sozinho e já mostrar formatado.
+        const { tipo, texto } = formatarChaveRecebida(resultado.chave)
+        setChavePix(texto)
+        if (tipo) setTipoChavePix(tipo)
         setOrigemChavePix('qr')
       }
     } else if (resultado.tipo === 'dinamico') {
@@ -131,8 +168,20 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
 
   /** Digitar na mão sempre vence a leitura automática. */
   function alterarChavePix(valor: string) {
-    setChavePix(valor)
+    // O tipo se ajusta antes da máscara: quem digita um CNPJ com "CPF"
+    // marcado veria o 12º dígito ser recusado se a ordem fosse a inversa.
+    const tipoAjustado = ajustarTipoDigitando(valor, tipoChavePix)
+    setTipoChavePix(tipoAjustado)
+    setChavePix(formatarChavePix(valor, tipoAjustado))
     setOrigemChavePix('digitada')
+  }
+
+  /** Trocar o tipo no botão reformata o que já está escrito -- os dígitos
+   *  são os mesmos, só a pontuação muda (CPF <-> celular é a troca comum,
+   *  já que os dois têm 11 dígitos). */
+  function alterarTipoChavePix(tipo: TipoChavePix) {
+    setTipoChavePix(tipo)
+    setChavePix((atual) => formatarChavePix(atual, tipo))
   }
 
   /** Remove uma foto de slot fixo já tirada (hoje só a do PIX, que é
@@ -176,7 +225,10 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
       litros: ehAbastecimento ? paraNumero(litros) : null,
       precoLitro: ehAbastecimento ? paraNumero(precoLitro) : null,
       tipoCombustivel: ehAbastecimento ? tipoCombustivel : null,
-      chavePix: chavePix.trim() || null,
+      // Sem pontuação e com o "+55" do celular: é assim que a chave está
+      // registrada no Banco Central. Mandar a versão formatada da tela
+      // quebraria o pagamento do outro lado.
+      chavePix: limparChavePix(chavePix, tipoChavePix) || null,
       fotos: fotos.map<FotoPayload>((f) => ({
         uriLocal: f.uriLocal,
         tipo: f.tipoFoto,
@@ -220,6 +272,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     precoLitro,
     tipoCombustivel,
     chavePix,
+    tipoChavePix,
     origemChavePix,
     valorAbastecimento,
     fotos,
@@ -236,6 +289,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     setPrecoLitro,
     setTipoCombustivel,
     setChavePix: alterarChavePix,
+    setTipoChavePix: alterarTipoChavePix,
     tirarFotoSlot,
     removerFotoSlot,
     tirarFotoMultipla,

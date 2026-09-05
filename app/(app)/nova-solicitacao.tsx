@@ -19,6 +19,7 @@ import { PreviaMarcaDagua } from '../../src/camera/PreviaMarcaDagua'
 import { SLOTS_ABASTECIMENTO } from '../../src/features/chat/fluxo'
 import { useFormularioSolicitacao } from '../../src/features/chat/useFormularioSolicitacao'
 import { useVeiculos } from '../../src/features/veiculos/useVeiculos'
+import { TIPOS_CHAVE_PIX } from '../../src/lib/chavePix'
 import { moeda } from '../../src/lib/formato'
 import { TIPOS_COMBUSTIVEL, type CategoriaSolicitacao } from '../../src/lib/tipos'
 
@@ -43,6 +44,10 @@ export default function TelaNovaSolicitacao() {
   const categoria: CategoriaSolicitacao = categoriaParam ?? 'MANUTENÇÃO'
 
   const formulario = useFormularioSolicitacao(categoria)
+  // Placeholder e teclado seguem o tipo de chave marcado -- teclado
+  // numérico pra CPF/CNPJ/celular poupa o motorista de caçar os números.
+  const tipoChaveAtual =
+    TIPOS_CHAVE_PIX.find((t) => t.tipo === formulario.tipoChavePix) ?? TIPOS_CHAVE_PIX[0]
   const { veiculos } = useVeiculos()
   const [buscaVeiculo, setBuscaVeiculo] = useState('')
   // A frota real tem mais de 100 veículos -- lista sempre aberta faria
@@ -255,35 +260,14 @@ export default function TelaNovaSolicitacao() {
               digitada contra a foto. */}
           <Text style={styles.tituloSecao}>Pagamento (PIX)</Text>
           <Text style={styles.ajudaSecao}>
-            Chave de quem vai receber. Opcional, mas agiliza o pagamento. Se
-            fotografar um QR Code de PIX, a chave é preenchida sozinha.
+            Aponte a câmera para o QR Code do recebedor: a foto sai sozinha e a
+            chave é preenchida sem digitar nada. Não tem QR? Tire a foto e
+            digite a chave abaixo.
           </Text>
 
-          <Text style={styles.rotulo}>Chave PIX</Text>
-          <TextInput
-            style={styles.input}
-            value={formulario.chavePix}
-            onChangeText={formulario.setChavePix}
-            placeholder="CPF, CNPJ, telefone, e-mail ou chave aleatória"
-            placeholderTextColor="#94a3b8"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {/* O motorista precisa saber de onde veio o que está no campo --
-              principalmente pra conferir antes de enviar, já que é pra
-              onde o dinheiro vai. */}
-          {formulario.origemChavePix === 'qr' && (
-            <Text style={styles.avisoBom}>✓ Chave lida do QR Code. Confira antes de enviar.</Text>
-          )}
-          {formulario.origemChavePix === 'qr-dinamico' && (
-            <Text style={styles.aviso}>
-              Esse QR Code é de cobrança e não contém a chave. Digite a chave acima.
-            </Text>
-          )}
-          {formulario.origemChavePix === 'qr-sem-chave' && (
-            <Text style={styles.aviso}>Não achei um QR Code de PIX na foto. Digite a chave acima.</Text>
-          )}
-
+          {/* A foto vem ANTES do campo de propósito: ela é que preenche a
+              chave. Pedir a chave primeiro convidava a digitar à mão o que
+              a câmera resolve sozinha um toque depois. */}
           <Text style={styles.rotulo}>Foto da chave ou do QR Code</Text>
           <View style={styles.listaFotos}>
             {formulario.fotoPix ? (
@@ -314,10 +298,54 @@ export default function TelaNovaSolicitacao() {
               <BotaoFoto
                 onPress={() => formulario.tirarFotoSlot('PIX')}
                 carregando={formulario.capturando}
-                texto="Tirar foto do PIX ou QR Code"
+                texto="Ler QR Code ou tirar foto"
               />
             )}
           </View>
+
+          {/* Tipo escolhido à mão porque CPF e celular têm os mesmos 11
+              dígitos -- não dá pra deduzir da digitação. Quando a chave
+              vem do QR Code o botão certo já se marca sozinho. */}
+          <Text style={styles.rotulo}>Chave PIX</Text>
+          <View style={styles.listaVeiculos}>
+            {TIPOS_CHAVE_PIX.map((t) => (
+              <Pressable
+                key={t.tipo}
+                onPress={() => formulario.setTipoChavePix(t.tipo)}
+                style={[styles.chip, formulario.tipoChavePix === t.tipo && styles.chipSelecionado]}
+              >
+                <Text
+                  style={[styles.chipTexto, formulario.tipoChavePix === t.tipo && styles.chipTextoSelecionado]}
+                >
+                  {t.rotulo}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <TextInput
+            style={styles.input}
+            value={formulario.chavePix}
+            onChangeText={formulario.setChavePix}
+            placeholder={tipoChaveAtual.placeholder}
+            placeholderTextColor="#94a3b8"
+            keyboardType={tipoChaveAtual.teclado}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {/* O motorista precisa saber de onde veio o que está no campo --
+              principalmente pra conferir antes de enviar, já que é pra
+              onde o dinheiro vai. */}
+          {formulario.origemChavePix === 'qr' && (
+            <Text style={styles.avisoBom}>✓ Chave lida do QR Code. Confira antes de enviar.</Text>
+          )}
+          {formulario.origemChavePix === 'qr-dinamico' && (
+            <Text style={styles.aviso}>
+              Esse QR Code é de cobrança e não contém a chave. Digite a chave acima.
+            </Text>
+          )}
+          {formulario.origemChavePix === 'qr-sem-chave' && (
+            <Text style={styles.aviso}>Não achei um QR Code de PIX na foto. Digite a chave acima.</Text>
+          )}
         </ScrollView>
 
         <View style={styles.rodape}>

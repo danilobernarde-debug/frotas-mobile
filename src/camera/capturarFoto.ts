@@ -1,6 +1,6 @@
 import { File, Paths } from 'expo-file-system'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
-import { abrirCameraCustomizada, type ContextoMarcaDagua } from './CameraCustomizada'
+import { abrirCameraComQrCode, abrirCameraCustomizada, type ContextoMarcaDagua } from './CameraCustomizada'
 import { uuid } from '../lib/uuid'
 
 const LARGURA_MAXIMA = 1600
@@ -27,7 +27,34 @@ const QUALIDADE_JPEG = 0.65
 export async function capturarFoto(marcaDagua?: ContextoMarcaDagua): Promise<string | null> {
   const uriCapturada = await abrirCameraCustomizada(marcaDagua)
   if (!uriCapturada) return null
+  return comprimirEGuardar(uriCapturada)
+}
 
+export interface FotoComQr {
+  uriLocal: string
+  /** Conteúdo do QR lido no visor, ou null se não havia QR (o motorista
+   *  tirou a foto na mão -- chave escrita em papel, por exemplo). */
+  codigoQr: string | null
+}
+
+/**
+ * Igual a capturarFoto(), mas com o leitor de QR ligado no visor: a foto
+ * dispara sozinha assim que um QR Code é reconhecido e o conteúdo lido
+ * volta junto, já em dado digital -- sem passar por leitura de imagem, ou
+ * seja, sem risco de trocar dígito.
+ *
+ * Usado hoje só na foto do PIX (useFormularioSolicitacao), onde o que
+ * importa é justamente o que está escrito no código.
+ */
+export async function capturarFotoComQr(marcaDagua?: ContextoMarcaDagua): Promise<FotoComQr | null> {
+  const captura = await abrirCameraComQrCode(marcaDagua)
+  if (!captura) return null
+  return { uriLocal: await comprimirEGuardar(captura.uri), codigoQr: captura.codigoQr }
+}
+
+/** Normaliza pra JPEG, reduz e copia pra pasta persistente -- ver o
+ *  racional completo no comentário de capturarFoto() acima. */
+async function comprimirEGuardar(uriCapturada: string): Promise<string> {
   const contexto = ImageManipulator.manipulate(uriCapturada)
   contexto.resize({ width: LARGURA_MAXIMA })
   const renderizada = await contexto.renderAsync()
