@@ -120,3 +120,20 @@ export async function enviarAnexoMensagem(params: {
   }
   return corpo.anexo as AnexoMensagemEnviado
 }
+
+/** Apaga um anexo. Quem pode é a RLS que decide (0043) -- 404 aqui
+ *  significa tanto "não existe" quanto "não é seu", de propósito. */
+export async function removerAnexo(params: {
+  alvo: 'aprovacoes' | 'checklists'
+  anexoId: number
+  tokenAcesso: string
+}): Promise<void> {
+  const resposta = await fetch(urlAnexo(params.alvo, params.anexoId), {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${params.tokenAcesso}` },
+  })
+  if (!resposta.ok) {
+    const corpo = await resposta.json().catch(() => null)
+    throw new Error(corpo?.erro ?? `Falha ao remover o anexo (status ${resposta.status}).`)
+  }
+}

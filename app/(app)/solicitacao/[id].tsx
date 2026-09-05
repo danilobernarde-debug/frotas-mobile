@@ -27,7 +27,7 @@ import { formatarChaveGravada } from '../../../src/lib/chavePix'
 import { useChavePix } from '../../../src/features/pix/useChavePix'
 import { data as fmtData, moeda } from '../../../src/lib/formato'
 import { lerChavePix } from '../../../src/lib/pixBrCode'
-import { enviarAnexo, urlAnexo } from '../../../src/lib/api'
+import { enviarAnexo, removerAnexo, urlAnexo } from '../../../src/lib/api'
 import { supabase } from '../../../src/lib/supabase'
 import { SLOTS_ABASTECIMENTO } from '../../../src/features/chat/fluxo'
 import { BarraTeclado, ID_BARRA_TECLADO } from '../../../src/ui/BarraTeclado'
@@ -322,6 +322,35 @@ export default function TelaDetalheSolicitacao() {
     // A foto vai junto de qualquer jeito: mesmo sem QR legível ela é o
     // registro que quem paga confere contra a chave digitada.
     await anexarUri('PIX', captura.uriLocal)
+  }
+
+  /** Trocar a foto da chave: apaga a atual pra próxima não chegar em
+   *  quem paga junto com a errada, sem dizer qual vale. */
+  async function apagarAnexo(anexoId: number) {
+    const { data: sessao } = await supabase.auth.getSession()
+    const tokenAtual = sessao.session?.access_token
+    if (!tokenAtual) {
+      Alert.alert('Sessão expirada', 'Entre de novo no app.')
+      return
+    }
+    setEnviando('PIX')
+    try {
+      await removerAnexo({ alvo: 'aprovacoes', anexoId, tokenAcesso: tokenAtual })
+      setAnexos((atual) => atual.filter((a) => a.id !== anexoId))
+    } catch (e) {
+      Alert.alert('Não consegui remover', e instanceof Error ? e.message : 'Tenta de novo.')
+    } finally {
+      setEnviando(null)
+    }
+  }
+
+  function confirmarApagarAnexo(anexoId: number) {
+    // Apagar é irreversível e o alvo é uma miniatura pequena, fácil de
+    // tocar sem querer -- por isso confirma.
+    Alert.alert('Remover esta foto?', 'A foto sai da solicitação.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Remover', style: 'destructive', onPress: () => apagarAnexo(anexoId) },
+    ])
   }
 
   function copiarChave() {
@@ -940,6 +969,7 @@ export default function TelaDetalheSolicitacao() {
                 // aqui é pra fotografar a chave que veio escrita num
                 // papel, ou pra pegar da galeria.
                 aoAdicionar={() => perguntarFonte('PIX', 'Chave / QR do PIX')}
+                aoRemover={confirmarApagarAnexo}
                 enviando={enviando === 'PIX'}
               />
               <View style={styles.acoesPix}>
@@ -1158,12 +1188,15 @@ function AreaFotoPix({
   fotosDataUri,
   aoAbrir,
   aoAdicionar,
+  aoRemover,
   enviando,
 }: {
   fotos: AnexoAprovacao[]
   fotosDataUri: Record<number, string>
   aoAbrir: (id: number) => void
   aoAdicionar?: () => void
+  /** Só na edição -- na exibição a foto é só pra conferir. */
+  aoRemover?: (id: number) => void
   enviando?: boolean
 }) {
   if (fotos.length === 0 && !aoAdicionar) return null
@@ -1171,13 +1204,20 @@ function AreaFotoPix({
   return (
     <View style={styles.linhaFotosPix}>
       {fotos.map((a) => (
-        <Pressable key={a.id} onPress={() => aoAbrir(a.id)}>
-          {fotosDataUri[a.id] ? (
-            <Image source={{ uri: fotosDataUri[a.id] }} style={styles.fotoPix} />
-          ) : (
-            <View style={[styles.fotoPix, styles.fotoPixVazia]} />
+        <View key={a.id}>
+          <Pressable onPress={() => aoAbrir(a.id)}>
+            {fotosDataUri[a.id] ? (
+              <Image source={{ uri: fotosDataUri[a.id] }} style={styles.fotoPix} />
+            ) : (
+              <View style={[styles.fotoPix, styles.fotoPixVazia]} />
+            )}
+          </Pressable>
+          {aoRemover && (
+            <Pressable onPress={() => aoRemover(a.id)} hitSlop={10} style={styles.removerFoto}>
+              <Ionicons name="close" size={16} color="#fff" />
+            </Pressable>
           )}
-        </Pressable>
+        </View>
       ))}
       {aoAdicionar && (
         <Pressable
@@ -1287,9 +1327,11 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   rotuloPix: { fontSize: 12, fontWeight: '700', color: '#0f766e', textTransform: 'uppercase', letterSpacing: 0.4 },
-  // flex: 1 -- chave aleatória tem 36 caracteres e, sem isso, empurraria
-  // o ícone de copiar pra fora da tela.
-  chavePix: { flex: 1, fontSize: 17, fontWeight: '700', color: '#0f172a', marginTop: 6 },
+  // flexShrink, não flex: com flex:1 o texto esticava até o fim da linha
+  // e jogava o ícone de copiar lá pro canto, longe da chave. Encolhendo
+  // só quando precisa, o ícone fica colado nela -- e a chave aleatória,
+  // de 36 caracteres, ainda cabe quebrando linha.
+  chavePix: { flexShrink: 1, fontSize: 17, fontWeight: '700', color: '#0f172a', marginTop: 6 },
   dicaPix: { fontSize: 12, color: '#64748b', marginTop: 6 },
   linkPix: { fontSize: 14, fontWeight: '700', color: '#0d9488', marginTop: 10 },
   linhaChavePix: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -1297,6 +1339,17 @@ const styles = StyleSheet.create({
   linhaFotosPix: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   fotoPix: { width: 84, height: 84, borderRadius: 8, backgroundColor: '#e2e8f0' },
   fotoPixVazia: { borderWidth: 1, borderColor: '#e2e8f0' },
+  removerFoto: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#dc2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   fotoPixAdicionar: {
     backgroundColor: '#f0fdfa',
     borderWidth: 1,
