@@ -382,6 +382,7 @@ export default function TelaDetalheSolicitacao() {
     if (!aprovacao) return
     setSalvandoDados(true)
     const dados = {
+      chave_pix: chave.paraGravar() || null,
       litros: litrosNum || null,
       // Derivado do que foi pago. 4 casas é o que a coluna guarda, e é
       // precisão de sobra: o erro no total volta em menos de um centavo
@@ -399,6 +400,9 @@ export default function TelaDetalheSolicitacao() {
     }
     setAprovacao((a) => (a ? ({ ...a, ...dados } as Aprovacao) : a))
     setCorrigindoAbastecimento(false)
+    // Volta pro chat: salvar aqui é o fim da tarefa que trouxe o
+    // motorista até esta tela, e é no chat que ele acompanha a resposta.
+    router.back()
   }
 
   useEffect(() => {
@@ -424,6 +428,7 @@ export default function TelaDetalheSolicitacao() {
         setValorPago(carregada.valor > 0 ? String(carregada.valor) : '')
         setTipoCombustivel(carregada.tipo_combustivel ?? '')
         setOdometro(carregada.odometro != null ? String(carregada.odometro) : '')
+        if (carregada.chave_pix) chave.definir(carregada.chave_pix)
       }
       setAnexos((respostaAnexos.data as AnexoAprovacao[]) ?? [])
       setCarregando(false)
@@ -750,9 +755,30 @@ export default function TelaDetalheSolicitacao() {
                   manda: elas são o registro de quem esteve lá, e não há o
                   que a gestão "corrija" numa foto de um posto onde não
                   esteve -- refazer, só voltando à bomba. */}
+              {/* PIX dentro do formulário: é a mesma ida ao posto, e ter
+                  dois quadros separados fazia parecer duas tarefas -- com
+                  dois botões de salvar, e um deles fácil de esquecer. */}
               {ehMinha && (
                 <>
-                  <Text style={styles.passo}>5. Tire as 3 fotos</Text>
+                  <Text style={styles.passo}>5. Chave PIX de quem recebe</Text>
+                  <Pressable
+                    onPress={lerQrDoPix}
+                    disabled={enviando === 'PIX'}
+                    style={[styles.botaoPix, enviando === 'PIX' && styles.botaoDesabilitado]}
+                  >
+                    {enviando === 'PIX' ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.botaoPixTexto}>📷 Ler QR Code ou tirar foto</Text>
+                    )}
+                  </Pressable>
+                  <CampoChavePix chave={chave} />
+                </>
+              )}
+
+              {ehMinha && (
+                <>
+                  <Text style={styles.passo}>6. Tire as 3 fotos</Text>
                   {SLOTS_ABASTECIMENTO.map((slot) => {
                     const anexo = anexos.find((a) => a.tipo === slot.tipoFoto)
                     const subindo = enviando === slot.tipoFoto
@@ -798,7 +824,7 @@ export default function TelaDetalheSolicitacao() {
             </Pressable>
           )}
 
-          {aprovacao.chave_pix && !editandoPix && (
+          {aprovacao.chave_pix && !editandoPix && !mostrarFormAbastecimento && (
             <View style={styles.blocoPix}>
               <Text style={styles.rotuloPix}>Chave PIX informada pelo motorista</Text>
               {/* selectable: quem paga precisa copiar a chave (toque
@@ -833,7 +859,7 @@ export default function TelaDetalheSolicitacao() {
               DEPOIS da solicitação -- o frentista foi buscar o QR, o dono
               não estava, o sinal caiu na hora de digitar. Antes disso a
               única saída era pedir pra gestão digitar por ele. */}
-          {!aprovacao.chave_pix && !editandoPix && podeInformarPix && (
+          {!aprovacao.chave_pix && !editandoPix && podeInformarPix && !mostrarFormAbastecimento && (
             <View style={styles.blocoPix}>
               <Text style={styles.rotuloPix}>Chave PIX</Text>
               <Text style={styles.dicaPix}>
