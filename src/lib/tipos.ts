@@ -32,7 +32,18 @@ export type CategoriaSolicitacao = 'ABASTECIMENTO' | 'MANUTENÇÃO' | 'OUTRO'
 
 export type StatusAprovacao = 'PENDENTE' | 'APROVADO' | 'REPROVADO'
 
-export type TipoAnexo = 'PROBLEMA' | 'ORCAMENTO' | 'NOTA FISCAL' | 'OUTRO' | 'BOMBA' | 'PLACA' | 'KM'
+/** Mesmo enum frota_status_pagamento do banco (0001_schema.sql). Só
+ *  ADMIN muda (trg_aprovacoes_aa_permissao). */
+export type StatusPagamento = 'NÃO SE APLICA' | 'AGD PAGAMENTO' | 'PAGO'
+
+export type TipoAnexo =
+  | 'PROBLEMA' | 'ORCAMENTO' | 'NOTA FISCAL' | 'OUTRO'
+  | 'BOMBA' | 'PLACA' | 'KM'
+  // Ciclo de pagamento (migration 0036 do frotas-web): PIX é a foto da
+  // chave/QR de quem recebe (tirada junto com a solicitação),
+  // COMPROVANTE é o comprovante do pagamento anexado depois pelo
+  // gestor/admin, e 'NOTA FISCAL' fecha o ciclo (motorista anexa a nota).
+  | 'PIX' | 'COMPROVANTE'
 
 /** Mesmo enum frota_tipo_combustivel do banco (0001_schema.sql). */
 export const TIPOS_COMBUSTIVEL = ['GASOLINA', 'ALCOOL', 'DIESEL', 'DIESEL S10', 'ARLA 32', 'GNV'] as const
@@ -51,7 +62,11 @@ export interface Aprovacao {
   tipo_combustivel: TipoCombustivel | null
   justificativa: string | null
   categoria: CategoriaSolicitacao | null
+  /** Chave PIX de quem recebe, digitada pelo motorista na criação
+   *  (migration 0037 do frotas-web). Nula em solicitação antiga. */
+  chave_pix: string | null
   status: StatusAprovacao
+  status_pagamento: StatusPagamento
   solicitante_id: string | null
   origem_local_id: string | null
   criado_em: string

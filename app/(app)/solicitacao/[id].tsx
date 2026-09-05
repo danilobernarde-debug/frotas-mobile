@@ -3,15 +3,23 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../../../src/auth/useAuth'
+import { capturarFoto, removerFotoLocal } from '../../../src/camera/capturarFoto'
+import { escolherImagemChat } from '../../../src/camera/escolherImagemChat'
 import { data as fmtData, moeda } from '../../../src/lib/formato'
-import { urlAnexo } from '../../../src/lib/api'
+import { enviarAnexo, urlAnexo } from '../../../src/lib/api'
 import { supabase } from '../../../src/lib/supabase'
-import type { AnexoAprovacao, Aprovacao } from '../../../src/lib/tipos'
+import type { AnexoAprovacao, Aprovacao, TipoAnexo } from '../../../src/lib/tipos'
 
 const ROTULO_STATUS: Record<string, string> = {
   PENDENTE: 'Pendente',
   APROVADO: 'Aprovado ✅',
   REPROVADO: 'Reprovado ❌',
+}
+
+const ROTULO_STATUS_PAGAMENTO: Record<string, string> = {
+  'NÃO SE APLICA': 'Sem pagamento previsto',
+  'AGD PAGAMENTO': 'Aguardando pagamento',
+  PAGO: 'Pago ✅',
 }
 
 const ROTULO_FOTO: Record<string, string> = {
@@ -20,7 +28,15 @@ const ROTULO_FOTO: Record<string, string> = {
   KM: 'KM do veículo',
   PROBLEMA: 'Foto do problema',
   OUTRO: 'Foto',
+  PIX: 'Chave / QR do PIX',
+  COMPROVANTE: 'Comprovante',
+  'NOTA FISCAL': 'Nota fiscal',
 }
+
+/** Anexos que o ciclo de pagamento tem seção própria pra mostrar -- o
+ *  resto (BOMBA/PLACA/KM/PROBLEMA/OUTRO/ORCAMENTO) cai na galeria geral
+ *  "Fotos", como sempre foi. */
+const TIPOS_PAGAMENTO: TipoAnexo[] = ['PIX', 'COMPROVANTE', 'NOTA FISCAL']
 
 /** <Image source={{ uri, headers }}> não manda o header Authorization de
  *  forma confiável (achado em teste real: um fetch() com o mesmo token
@@ -50,6 +66,106 @@ export default function TelaDetalheSolicitacao() {
   const [fotosDataUri, setFotosDataUri] = useState<Record<number, string>>({})
   const [fotoAmpliada, setFotoAmpliada] = useState<number | null>(null)
   const [decidindo, setDecidindo] = useState(false)
+  /** Qual anexo está subindo agora (null = nenhum) -- também serve pra
+   *  desabilitar o botão daquela seção sem travar a outra. */
+  const [enviando, setEnviando] = useState<TipoAnexo | null>(null)
+
+  const ehMinha = Boolean(perfil?.id && aprovacao?.solicitante_id === perfil.id)
+  const ehGestao = perfil?.papel === 'ADMIN' || perfil?.papel === 'GESTOR'
+  // O ciclo de pagamento só abre depois do "sim" -- antes disso não há o
+  // que pagar nem nota pra cobrar.
+  const aprovada = aprovacao?.status === 'APROVADO'
+
+  /** Câmera própria do app ou galeria, devolvendo só o uri do arquivo
+   *  local. Comprovante e nota fiscal são documentos pra LER, então a
+   *  câmera vai sem contexto de marca d'água (nenhuma faixa por cima) --
+   *  mesma razão da foto do PIX, ver tirarFotoSlot em
+   *  useFormularioSolicitacao. */
+  async function escolherArquivo(fonte: 'camera' | 'galeria'): Promise<string | null> {
+    if (fonte === 'camera') return await capturarFoto()
+
+    const resultado = await escolherImagemChat('galeria')
+    if (!resultado.ok) {
+      if (resultado.motivo === 'permissao') {
+        Alert.alert('Sem permissão', 'Libere o acesso às fotos nas configurações do aparelho.')
+      } else if (resultado.motivo === 'travado') {
+        Alert.alert('Não consegui abrir a galeria', 'Tenta de novo em alguns segundos.')
+      }
+      return null
+    }
+    if (resultado.midia.categoria !== 'IMAGEM') {
+      Alert.alert('Envie uma foto', 'Vídeo não serve como comprovante nem como nota fiscal.')
+      return null
+    }
+    return resultado.midia.uri
+  }
+
+  /**
+   * Sobe direto (await no upload), sem passar pela fila do outbox: esta
+   * tela já depende de rede pra existir -- ela busca a solicitação e as
+   * fotos do servidor a cada abertura, não tem versão offline. Enfileirar
+   * aqui só adiaria o envio sem o usuário poder acompanhar, e ainda
+   * esbarraria no cooldown de 8s do runSync.
+   */
+  async function anexar(tipo: TipoAnexo, fonte: 'camera' | 'galeria') {
+    const uri = await escolherArquivo(fonte)
+    if (!uri || !aprovacao) return
+
+    setEnviando(tipo)
+    try {
+      const { data: sessao } = await supabase.auth.getSession()
+      const tokenAtual = sessao.session?.access_token
+      if (!tokenAtual) throw new Error('Sessão expirada -- entre de novo no app.')
+
+      const anexo = await enviarAnexo({
+        alvo: 'aprovacoes',
+        idPai: aprovacao.id,
+        uriArquivo: uri,
+        tipo,
+        tokenAcesso: tokenAtual,
+      })
+      removerFotoLocal(uri)
+      setToken(tokenAtual)
+      setAnexos((atual) => [
+        ...atual,
+        {
+          id: anexo.id,
+          aprovacao_id: aprovacao.id,
+          tipo,
+          caminho: anexo.caminho,
+          legenda: anexo.legenda,
+          criado_em: anexo.criado_em,
+        },
+      ])
+
+      // Anexar o comprovante É o ato de pagar -- não faz sentido pedir
+      // um segundo toque em "marcar como pago" logo depois. Só ADMIN:
+      // trg_aprovacoes_aa_permissao rejeita a mudança de qualquer outro
+      // papel, então nem tenta pra GESTOR (o anexo dele fica registrado
+      // e o ADMIN confirma o pagamento depois).
+      if (tipo === 'COMPROVANTE' && perfil?.papel === 'ADMIN' && aprovacao.status_pagamento !== 'PAGO') {
+        const { error } = await supabase
+          .from('frota_aprovacoes')
+          .update({ status_pagamento: 'PAGO' })
+          .eq('id', aprovacao.id)
+        if (!error) setAprovacao((a) => (a ? { ...a, status_pagamento: 'PAGO' } : a))
+      }
+    } catch (e) {
+      Alert.alert('Não consegui enviar', e instanceof Error ? e.message : 'Tenta de novo em alguns segundos.')
+    } finally {
+      setEnviando(null)
+    }
+  }
+
+  /** Alert nativo em vez de um Modal de escolha: esta tela já tem o Modal
+   *  da foto ampliada, e dois Modal do RN abertos juntos travam o iOS. */
+  function perguntarFonte(tipo: TipoAnexo, titulo: string) {
+    Alert.alert(titulo, 'De onde vem o arquivo?', [
+      { text: 'Tirar foto', onPress: () => anexar(tipo, 'camera') },
+      { text: 'Escolher da galeria', onPress: () => anexar(tipo, 'galeria') },
+      { text: 'Cancelar', style: 'cancel' },
+    ])
+  }
 
   // GESTOR até enxerga esta tela (RLS deixa ver qualquer solicitação da
   // regional), mas só ADMIN decide de verdade -- uma trigger no banco
@@ -104,6 +220,10 @@ export default function TelaDetalheSolicitacao() {
     if (anexos.length === 0 || !token) return
     let cancelado = false
     for (const a of anexos) {
+      // Já baixado numa passada anterior -- a lista cresce quando um
+      // comprovante/nota é anexado aqui mesmo, e sem esta guarda o efeito
+      // rebaixaria todas as fotos antigas junto com a nova.
+      if (fotosDataUri[a.id]) continue
       baixarComoDataUri(urlAnexo('aprovacoes', a.id), token)
         .then((dataUri) => {
           if (!cancelado) setFotosDataUri((atual) => ({ ...atual, [a.id]: dataUri }))
@@ -115,6 +235,10 @@ export default function TelaDetalheSolicitacao() {
     return () => {
       cancelado = true
     }
+    // fotosDataUri de propósito FORA das dependências: ele é lido só como
+    // "o que já tenho" e é escrito dentro do próprio efeito -- incluí-lo
+    // faria o efeito se redisparar a cada foto que chega.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anexos, token])
 
   return (
@@ -141,7 +265,12 @@ export default function TelaDetalheSolicitacao() {
         </View>
       ) : (
         <ScrollView style={styles.tela} contentContainerStyle={styles.conteudo}>
-          <Text style={styles.status}>{ROTULO_STATUS[aprovacao.status]}</Text>
+          <Text style={styles.status}>
+            {ROTULO_STATUS[aprovacao.status]}
+            {aprovada && aprovacao.status_pagamento !== 'NÃO SE APLICA'
+              ? `  ·  ${ROTULO_STATUS_PAGAMENTO[aprovacao.status_pagamento]}`
+              : ''}
+          </Text>
           <Text style={styles.servico}>{aprovacao.servico}</Text>
 
           {perfil?.papel === 'ADMIN' && aprovacao.status === 'PENDENTE' && (
@@ -202,32 +331,65 @@ export default function TelaDetalheSolicitacao() {
             </View>
           )}
 
-          {anexos.length > 0 && (
-            <>
-              <Text style={styles.tituloFotos}>Fotos</Text>
-              <View style={styles.grade}>
-                {anexos.map((a) => (
-                  <View key={a.id} style={styles.fotoCartao}>
-                    {fotosDataUri[a.id] ? (
-                      // A miniatura corta em quadrado (cover) -- numa foto
-                      // retrato, a marca d'água (BOMBA/PLACA/KM) fica no
-                      // rodapé da imagem inteira e quase some no corte
-                      // (achado em teste real). Toque abre a foto completa,
-                      // sem cortar nada.
-                      <Pressable onPress={() => setFotoAmpliada(a.id)}>
-                        <Image source={{ uri: fotosDataUri[a.id] }} style={styles.foto} resizeMode="cover" />
-                      </Pressable>
-                    ) : (
-                      <View style={[styles.foto, styles.fotoCarregando]}>
-                        <ActivityIndicator size="small" />
-                      </View>
-                    )}
-                    <Text style={styles.fotoLegenda}>{ROTULO_FOTO[a.tipo] ?? a.tipo}</Text>
-                  </View>
-                ))}
-              </View>
-            </>
+          {aprovacao.chave_pix && (
+            <View style={styles.blocoPix}>
+              <Text style={styles.rotuloPix}>Chave PIX informada pelo motorista</Text>
+              {/* selectable: quem paga precisa copiar a chave (toque
+                  longo -> Copiar). Não usa área de transferência via
+                  código de propósito -- expo-clipboard é módulo nativo e
+                  exigiria recompilar o app só por isso. */}
+              <Text style={styles.chavePix} selectable>
+                {aprovacao.chave_pix}
+              </Text>
+              <Text style={styles.dicaPix}>Toque e segure para copiar.</Text>
+            </View>
           )}
+
+          <SecaoAnexos
+            titulo="Fotos"
+            anexos={anexos.filter((a) => !TIPOS_PAGAMENTO.includes(a.tipo))}
+            fotosDataUri={fotosDataUri}
+            aoAbrir={setFotoAmpliada}
+          />
+
+          <SecaoAnexos
+            titulo="PIX do recebedor"
+            vazio="O motorista não anexou foto da chave."
+            anexos={anexos.filter((a) => a.tipo === 'PIX')}
+            fotosDataUri={fotosDataUri}
+            aoAbrir={setFotoAmpliada}
+            // Sem foto nenhuma e sem chave digitada não vale ocupar
+            // espaço com uma seção vazia -- não é um passo que alguém
+            // precise cumprir aqui.
+            oculta={!aprovacao.chave_pix && !anexos.some((a) => a.tipo === 'PIX')}
+          />
+
+          <SecaoAnexos
+            titulo="Comprovante de pagamento"
+            vazio="Nenhum comprovante enviado ainda."
+            anexos={anexos.filter((a) => a.tipo === 'COMPROVANTE')}
+            fotosDataUri={fotosDataUri}
+            aoAbrir={setFotoAmpliada}
+            oculta={!aprovada}
+            // Quem paga é a gestão -- o motorista só acompanha.
+            textoBotao={ehGestao ? 'Enviar comprovante' : undefined}
+            enviando={enviando === 'COMPROVANTE'}
+            aoEnviar={() => perguntarFonte('COMPROVANTE', 'Comprovante de pagamento')}
+          />
+
+          <SecaoAnexos
+            titulo="Nota fiscal"
+            vazio="Nenhuma nota fiscal enviada ainda."
+            anexos={anexos.filter((a) => a.tipo === 'NOTA FISCAL')}
+            fotosDataUri={fotosDataUri}
+            aoAbrir={setFotoAmpliada}
+            oculta={!aprovada}
+            // O motorista é quem recebe a nota na mão, no posto/oficina --
+            // a gestão também pode anexar (às vezes chega por e-mail).
+            textoBotao={ehMinha || ehGestao ? 'Enviar nota fiscal' : undefined}
+            enviando={enviando === 'NOTA FISCAL'}
+            aoEnviar={() => perguntarFonte('NOTA FISCAL', 'Nota fiscal')}
+          />
         </ScrollView>
       )}
 
@@ -253,6 +415,86 @@ export default function TelaDetalheSolicitacao() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+  )
+}
+
+/**
+ * Um grupo de anexos da solicitação (fotos da situação, PIX, comprovante,
+ * nota fiscal) -- mesma grade das fotos de sempre, mais um botão de envio
+ * opcional. Vive aqui e não em src/ porque nada além desta tela mostra
+ * anexo de aprovação hoje; se aparecer um segundo lugar, aí sim vale
+ * mudar de casa.
+ */
+function SecaoAnexos({
+  titulo,
+  vazio,
+  anexos,
+  fotosDataUri,
+  aoAbrir,
+  oculta = false,
+  textoBotao,
+  enviando = false,
+  aoEnviar,
+}: {
+  titulo: string
+  /** Texto quando não há nenhum anexo. Sem ele, a seção some quando vazia
+   *  (caso da galeria geral "Fotos": não é um passo pendente). */
+  vazio?: string
+  anexos: AnexoAprovacao[]
+  fotosDataUri: Record<number, string>
+  aoAbrir: (id: number) => void
+  oculta?: boolean
+  /** Ausente = este usuário não pode anexar aqui, só ver. */
+  textoBotao?: string
+  enviando?: boolean
+  aoEnviar?: () => void
+}) {
+  if (oculta) return null
+  if (anexos.length === 0 && !vazio) return null
+
+  return (
+    <>
+      <Text style={styles.tituloFotos}>{titulo}</Text>
+      {anexos.length === 0 ? (
+        <Text style={styles.textoVazioSecao}>{vazio}</Text>
+      ) : (
+        <View style={styles.grade}>
+          {anexos.map((a) => (
+            <View key={a.id} style={styles.fotoCartao}>
+              {fotosDataUri[a.id] ? (
+                // A miniatura corta em quadrado (cover) -- numa foto
+                // retrato, a marca d'água (BOMBA/PLACA/KM) fica no
+                // rodapé da imagem inteira e quase some no corte
+                // (achado em teste real). Toque abre a foto completa,
+                // sem cortar nada.
+                <Pressable onPress={() => aoAbrir(a.id)}>
+                  <Image source={{ uri: fotosDataUri[a.id] }} style={styles.foto} resizeMode="cover" />
+                </Pressable>
+              ) : (
+                <View style={[styles.foto, styles.fotoCarregando]}>
+                  <ActivityIndicator size="small" />
+                </View>
+              )}
+              <Text style={styles.fotoLegenda}>{ROTULO_FOTO[a.tipo] ?? a.tipo}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {textoBotao && (
+        <Pressable
+          onPress={aoEnviar}
+          disabled={enviando}
+          style={({ pressed }) => [styles.botaoAnexar, (pressed || enviando) && styles.botaoDesabilitado]}
+        >
+          {enviando ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.botaoAnexarTexto}>📎 {textoBotao}</Text>
+          )}
+        </Pressable>
+      )}
+    </>
   )
 }
 
@@ -286,6 +528,29 @@ const styles = StyleSheet.create({
   rotulo: { fontSize: 13, color: '#64748b' },
   valor: { fontSize: 14, color: '#1e293b', fontWeight: '600' },
   tituloFotos: { fontSize: 14, fontWeight: '700', color: '#334155', marginTop: 20, marginBottom: 8 },
+  textoVazioSecao: { fontSize: 13, color: '#94a3b8', fontStyle: 'italic' },
+  botaoAnexar: {
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    backgroundColor: '#0d9488',
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  botaoAnexarTexto: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  blocoPix: {
+    marginTop: 20,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    borderRadius: 12,
+    padding: 14,
+  },
+  rotuloPix: { fontSize: 12, fontWeight: '700', color: '#0f766e', textTransform: 'uppercase', letterSpacing: 0.4 },
+  chavePix: { fontSize: 17, fontWeight: '700', color: '#0f172a', marginTop: 6 },
+  dicaPix: { fontSize: 12, color: '#64748b', marginTop: 6 },
   grade: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   fotoCartao: { width: '47%' },
   foto: { width: '100%', aspectRatio: 1, borderRadius: 10, backgroundColor: '#e2e8f0' },

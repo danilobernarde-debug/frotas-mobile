@@ -227,7 +227,7 @@ export default function TelaNovaSolicitacao() {
                   )
                 })
               : [
-                  ...formulario.fotos.map((foto, indice) => (
+                  ...formulario.fotosProblema.map((foto, indice) => (
                     <LinhaFotoPronta
                       key={foto.uriLocal}
                       foto={foto}
@@ -242,9 +242,66 @@ export default function TelaNovaSolicitacao() {
                     key="tirar-foto"
                     onPress={formulario.tirarFotoMultipla}
                     carregando={formulario.capturando}
-                    texto={formulario.fotos.length > 0 ? 'Tirar outra foto' : 'Tirar foto'}
+                    texto={formulario.fotosProblema.length > 0 ? 'Tirar outra foto' : 'Tirar foto'}
                   />,
                 ]}
+          </View>
+
+          {/* Pagamento -- o posto/oficina quase nunca é fornecedor
+              cadastrado, então a chave vem na hora, com o motorista lá.
+              Os dois campos são opcionais de propósito: nem todo
+              recebedor mostra QR pra fotografar, e nem toda solicitação
+              já nasce com a chave em mãos. Quem paga confere a chave
+              digitada contra a foto. */}
+          <Text style={styles.tituloSecao}>Pagamento (PIX)</Text>
+          <Text style={styles.ajudaSecao}>
+            Chave de quem vai receber. Opcional, mas agiliza o pagamento.
+          </Text>
+
+          <Text style={styles.rotulo}>Chave PIX</Text>
+          <TextInput
+            style={styles.input}
+            value={formulario.chavePix}
+            onChangeText={formulario.setChavePix}
+            placeholder="CPF, CNPJ, telefone, e-mail ou chave aleatória"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <Text style={styles.rotulo}>Foto da chave ou do QR Code</Text>
+          <View style={styles.listaFotos}>
+            {formulario.fotoPix ? (
+              <View style={styles.cartaoFotoPronta}>
+                <Pressable
+                  onPress={() => setFotoAberta(formulario.fotoPix!.uriLocal)}
+                  style={styles.miniaturaContainer}
+                >
+                  <Image
+                    source={{ uri: formulario.fotoPix.uriLocal }}
+                    style={styles.miniatura}
+                    resizeMode="cover"
+                  />
+                </Pressable>
+                <View style={styles.linhaFotoInfo}>
+                  <Text style={styles.fotoOk}>✓ Foto do PIX</Text>
+                  <View style={styles.acoesFoto}>
+                    <Pressable onPress={() => formulario.tirarFotoSlot('PIX')} hitSlop={8}>
+                      <Text style={styles.linkTirarNovo}>🔄 Tirar de novo</Text>
+                    </Pressable>
+                    <Pressable onPress={() => formulario.removerFotoSlot('PIX')} hitSlop={8}>
+                      <Text style={styles.linkRemover}>Remover</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <BotaoFoto
+                onPress={() => formulario.tirarFotoSlot('PIX')}
+                carregando={formulario.capturando}
+                texto="Tirar foto do PIX"
+              />
+            )}
           </View>
         </ScrollView>
 
@@ -268,6 +325,9 @@ export default function TelaNovaSolicitacao() {
           {fotoAberta &&
             (() => {
               const foto = formulario.fotos.find((f) => f.uriLocal === fotoAberta)
+              // A do PIX abre limpa (sem a faixa) -- é o que vai ser
+              // salvo de verdade nela, ver tirarFotoSlot.
+              if (foto?.tipoFoto === 'PIX') return <FotoAmpliada uri={fotoAberta} />
               return (
                 <FotoAmpliada
                   uri={fotoAberta}
@@ -411,8 +471,20 @@ const styles = StyleSheet.create({
   // da prévia da marca d'água de um jeito legível (pedido do usuário).
   miniatura: { width: '100%', aspectRatio: 4 / 3, backgroundColor: '#e2e8f0' },
   linhaFotoInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  acoesFoto: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   fotoOk: { color: '#0f766e', fontWeight: '700', fontSize: 15 },
   linkTirarNovo: { color: '#64748b', fontWeight: '600', fontSize: 14 },
+  linkRemover: { color: '#be123c', fontWeight: '600', fontSize: 14 },
+  tituloSecao: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 28,
+    paddingTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  ajudaSecao: { fontSize: 13, color: '#64748b', marginTop: 4 },
   fundoModalFoto: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
   botaoFoto: { alignSelf: 'flex-start', backgroundColor: '#0d9488', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 },
   botaoFotoTexto: { color: '#fff', fontSize: 15, fontWeight: '700' },

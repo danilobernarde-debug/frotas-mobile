@@ -40,6 +40,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   const [litros, setLitros] = useState('')
   const [precoLitro, setPrecoLitro] = useState('')
   const [tipoCombustivel, setTipoCombustivel] = useState('')
+  const [chavePix, setChavePix] = useState('')
   const [fotos, setFotos] = useState<FotoCapturada[]>([])
   const [enviando, setEnviando] = useState(false)
   const { capturando, capturar } = useCapturaComLocal()
@@ -72,9 +73,21 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   const marcaDagua = { nomeMotorista: perfil?.motoristaNome, placa: veiculo?.placa }
 
   async function tirarFotoSlot(tipoFoto: string) {
-    const foto = await capturar(completarLocal, marcaDagua)
+    // A foto do PIX sai sem a faixa da marca d'água (nem no visor, nem
+    // carimbada no servidor -- ver TIPOS_COM_MARCA_DAGUA na rota de
+    // anexos): ela existe pra ser LIDA, chave ou QR code, e tanto a
+    // barra do rodapé quanto o QR que o carimbo desenha no canto
+    // atrapalhariam justamente isso.
+    const foto = await capturar(completarLocal, tipoFoto === 'PIX' ? undefined : marcaDagua)
     if (!foto) return
     setFotos((atual) => [...atual.filter((f) => f.tipoFoto !== tipoFoto), { tipoFoto, ...foto }])
+  }
+
+  /** Remove uma foto de slot fixo já tirada (hoje só a do PIX, que é
+   *  opcional -- as 3 do abastecimento são obrigatórias, lá só faz
+   *  sentido "tirar de novo"). */
+  function removerFotoSlot(tipoFoto: string) {
+    setFotos((atual) => atual.filter((f) => f.tipoFoto !== tipoFoto))
   }
 
   /** Lista aberta (manutenção) -- cada toque soma mais uma foto. */
@@ -109,6 +122,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
       litros: ehAbastecimento ? paraNumero(litros) : null,
       precoLitro: ehAbastecimento ? paraNumero(precoLitro) : null,
       tipoCombustivel: ehAbastecimento ? tipoCombustivel : null,
+      chavePix: chavePix.trim() || null,
       fotos: fotos.map<FotoPayload>((f) => ({
         uriLocal: f.uriLocal,
         tipo: f.tipoFoto,
@@ -124,9 +138,15 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     setEnviando(false)
   }
 
+  // Só as fotos do problema (manutenção) -- a do PIX mora no mesmo
+  // array, mas não conta como registro do problema nem aparece na lista
+  // aberta da tela.
+  const fotosProblema = fotos.filter((f) => f.tipoFoto === 'PROBLEMA')
+  const fotoPix = fotos.find((f) => f.tipoFoto === 'PIX') ?? null
+
   const podeEnviar = Boolean(
     veiculo &&
-      (categoria !== 'MANUTENÇÃO' || (descricao.trim() && fotos.length > 0)) &&
+      (categoria !== 'MANUTENÇÃO' || (descricao.trim() && fotosProblema.length > 0)) &&
       (categoria !== 'ABASTECIMENTO' ||
         (paraNumero(odometro) > 0 &&
           paraNumero(litros) > 0 &&
@@ -145,8 +165,11 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     litros,
     precoLitro,
     tipoCombustivel,
+    chavePix,
     valorAbastecimento,
     fotos,
+    fotosProblema,
+    fotoPix,
     capturando,
     enviando,
     podeEnviar,
@@ -157,7 +180,9 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     setLitros,
     setPrecoLitro,
     setTipoCombustivel,
+    setChavePix,
     tirarFotoSlot,
+    removerFotoSlot,
     tirarFotoMultipla,
     substituirFotoMultipla,
     enviarSolicitacao,

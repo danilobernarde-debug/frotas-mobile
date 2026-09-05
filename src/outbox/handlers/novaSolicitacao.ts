@@ -44,6 +44,11 @@ export interface NovaSolicitacaoPayload {
   litros?: number | null
   precoLitro?: number | null
   tipoCombustivel?: string | null
+  /** Chave PIX de quem vai receber, digitada pelo motorista (posto/
+   *  oficina quase nunca é fornecedor cadastrado, então a chave vem na
+   *  hora). Vazia/ausente quando ele não informou. A FOTO da chave/QR
+   *  não vem aqui -- é mais uma entrada de `fotos`, com tipo 'PIX'. */
+  chavePix?: string | null
   fotos: FotoPayload[]
   aprovacaoId?: number
 }
@@ -69,6 +74,7 @@ async function enviar(
         litros: payload.litros,
         preco_litro: payload.precoLitro,
         tipo_combustivel: payload.tipoCombustivel,
+        chave_pix: payload.chavePix || null,
         origem_local_id: ctx.itemId,
       })
       .select('id')
