@@ -317,7 +317,7 @@ export default function TelaNovaSolicitacao() {
           {/* Dizer o que foi reconhecido é o que substitui os botões de
               tipo: o motorista confere o resultado em vez de declarar a
               intenção antes. */}
-          {formulario.tipoChavePix && (
+          {formulario.tipoChavePix && formulario.chavePixCompleta && !formulario.avisoChavePix && (
             <Text style={styles.avisoBom}>
               ✓ Reconhecido como {NOME_TIPO_CHAVE[formulario.tipoChavePix]}
             </Text>
@@ -331,11 +331,10 @@ export default function TelaNovaSolicitacao() {
               </Text>
             </Pressable>
           )}
-          {formulario.chavePixSuspeita && (
-            <Text style={styles.aviso}>
-              Confira: esses 11 números não formam um CPF válido nem um celular.
-            </Text>
-          )}
+          {/* A frase vem pronta do módulo -- cada motivo (CPF que não
+              fecha, CNPJ que não fecha, números demais) pede uma diferente,
+              e quem sabe qual é o motivo é quem identificou. */}
+          {formulario.avisoChavePix && <Text style={styles.aviso}>{formulario.avisoChavePix}</Text>}
           {/* O motorista precisa saber de onde veio o que está no campo --
               principalmente pra conferir antes de enviar, já que é pra
               onde o dinheiro vai. */}
