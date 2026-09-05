@@ -1,15 +1,23 @@
 /**
- * Máscara e normalização da chave PIX digitada à mão.
+ * Identifica e formata a chave PIX digitada, sem perguntar o tipo.
  *
- * Chave PIX não tem um formato só -- são cinco, com regras diferentes --
- * e os dois mais comuns (CPF e celular) têm exatamente 11 dígitos, então
- * NÃO dá pra adivinhar o tipo pelo que foi digitado. Por isso a tela
- * mostra o tipo escolhido explicitamente (é o que o próprio app do banco
- * faz na hora de cadastrar chave) e este módulo só formata o que
- * corresponde ao tipo escolhido.
+ * O problema central: CPF e celular têm exatamente 11 dígitos, então o
+ * tamanho não separa os dois. Quem resolve isso é o dígito verificador do
+ * CPF -- ele é calculado a partir dos 9 primeiros, então um CPF de
+ * verdade SEMPRE passa na conta, enquanto um telefone só passa por
+ * coincidência (cerca de 1 em 100, ver `cpfValido`). Combinado com o
+ * formato do celular brasileiro (DDD que existe + o dígito 9 na frente do
+ * número), dá pra acertar o tipo sozinho na quase totalidade dos casos.
+ *
+ * Quando os 11 dígitos passam nas DUAS verificações -- acontece com uns
+ * 6% dos CPFs, que por acaso começam com algo parecido com DDD + 9 -- o
+ * módulo assume CPF e devolve a outra possibilidade em `alternativa`, pra
+ * tela poder oferecer a troca num toque. É o único caso em que nenhuma
+ * regra local decide: os aplicativos de banco resolvem consultando o
+ * cadastro de chaves do Banco Central, o que daqui não dá pra fazer.
  *
  * Duas representações, de propósito:
- *   - a formatada, com pontuação, que aparece no campo enquanto digita;
+ *   - a formatada, com pontuação, que aparece no campo;
  *   - a limpa (`limparChavePix`), que é o que vai pro servidor -- o
  *     registro da chave no Banco Central é sem pontuação, e celular leva
  *     o "+55" na frente. Mandar a versão bonita quebraria o pagamento.
@@ -20,37 +28,61 @@
 
 export type TipoChavePix = 'CPF' | 'CNPJ' | 'CELULAR' | 'EMAIL' | 'ALEATORIA'
 
-/** Quantos dígitos cada tipo numérico aceita -- também é onde a digitação
- *  para (não adianta deixar entrar o 12º dígito de um CPF). */
 const DIGITOS_CPF = 11
 const DIGITOS_CNPJ = 14
 const DIGITOS_CELULAR = 11
 /** Chave aleatória é um UUID: 32 hexadecimais em 8-4-4-4-12. */
 const HEX_ALEATORIA = 32
 
-/** Alimenta os botões de tipo e o teclado/placeholder do campo. `teclado`
- *  é escrito como literal (em vez de importar KeyboardTypeOptions) só pra
- *  este módulo continuar sem importar react-native. */
-export const TIPOS_CHAVE_PIX = [
-  { tipo: 'CPF', rotulo: 'CPF', placeholder: '000.000.000-00', teclado: 'number-pad' },
-  { tipo: 'CNPJ', rotulo: 'CNPJ', placeholder: '00.000.000/0000-00', teclado: 'number-pad' },
-  { tipo: 'CELULAR', rotulo: 'Celular', placeholder: '(00) 00000-0000', teclado: 'number-pad' },
-  { tipo: 'EMAIL', rotulo: 'E-mail', placeholder: 'nome@email.com', teclado: 'email-address' },
-  {
-    tipo: 'ALEATORIA',
-    rotulo: 'Aleatória',
-    placeholder: '00000000-0000-0000-0000-000000000000',
-    teclado: 'default',
-  },
-] as const satisfies ReadonlyArray<{
-  tipo: TipoChavePix
-  rotulo: string
-  placeholder: string
-  teclado: 'number-pad' | 'email-address' | 'default'
-}>
+/** DDDs que existem de fato. Um número que comece fora desta lista não é
+ *  celular, o que já elimina boa parte da confusão com CPF. */
+const DDDS = new Set([
+  11, 12, 13, 14, 15, 16, 17, 18, 19,
+  21, 22, 24, 27, 28,
+  31, 32, 33, 34, 35, 37, 38,
+  41, 42, 43, 44, 45, 46, 47, 48, 49,
+  51, 53, 54, 55,
+  61, 62, 63, 64, 65, 66, 67, 68, 69,
+  71, 73, 74, 75, 77, 79,
+  81, 82, 83, 84, 85, 86, 87, 88, 89,
+  91, 92, 93, 94, 95, 96, 97, 98, 99,
+])
 
 function soDigitos(texto: string): string {
   return texto.replace(/\D/g, '')
+}
+
+/**
+ * Confere os dois dígitos verificadores do CPF (módulo 11).
+ *
+ * É o que separa CPF de celular: os 9 primeiros dígitos determinam os 2
+ * últimos, então um CPF real sempre fecha a conta e um telefone só fecha
+ * por acaso -- daí a `alternativa` devolvida por identificarChavePix().
+ *
+ * Sequências repetidas (111.111.111-11 e parentes) fecham a aritmética
+ * mas não são CPF de ninguém; entram na recusa explícita abaixo.
+ */
+export function cpfValido(digitos: string): boolean {
+  if (digitos.length !== DIGITOS_CPF) return false
+  if (/^(\d)\1{10}$/.test(digitos)) return false
+
+  // Os dois dígitos seguem a mesma regra, mudando só quantos números
+  // entram na soma (9 pro primeiro, 10 pro segundo) e o peso inicial.
+  for (const ate of [9, 10]) {
+    let soma = 0
+    for (let i = 0; i < ate; i++) soma += Number(digitos[i]) * (ate + 1 - i)
+    const esperado = ((soma * 10) % 11) % 10
+    if (esperado !== Number(digitos[ate])) return false
+  }
+  return true
+}
+
+/** Formato de celular brasileiro: DDD que existe + o 9 que todo número
+ *  móvel passou a ter. Fixo (8 dígitos) não pode ser chave PIX. */
+export function pareceCelular(digitos: string): boolean {
+  if (digitos.length !== DIGITOS_CELULAR) return false
+  if (!DDDS.has(Number(digitos.slice(0, 2)))) return false
+  return digitos[2] === '9'
 }
 
 /**
@@ -73,12 +105,8 @@ function agrupar(digitos: string, tamanhos: number[], separadores: string[]): st
   return saida
 }
 
-/**
- * Aplica a máscara do tipo escolhido ao que está sendo digitado.
- *
- * E-mail sai como veio: qualquer recorte automático estragaria endereço
- * válido, e não existe formato posicional pra impor.
- */
+/** Aplica a pontuação de um tipo já conhecido. E-mail sai como veio:
+ *  qualquer recorte automático estragaria endereço válido. */
 export function formatarChavePix(texto: string, tipo: TipoChavePix): string {
   switch (tipo) {
     case 'CPF':
@@ -103,10 +131,11 @@ export function formatarChavePix(texto: string, tipo: TipoChavePix): string {
 
 /**
  * Versão que vai pro servidor: sem pontuação, e celular com o "+55" que o
- * Banco Central exige no registro da chave. Devolve string vazia quando
- * não há nada digitado (quem chama transforma em null).
+ * Banco Central exige no registro da chave. Tipo desconhecido vai como
+ * foi digitado -- o campo é opcional e quem paga ainda confere contra a
+ * foto, então recusar seria pior do que passar adiante.
  */
-export function limparChavePix(texto: string, tipo: TipoChavePix): string {
+export function limparChavePix(texto: string, tipo: TipoChavePix | null): string {
   switch (tipo) {
     case 'CPF':
     case 'CNPJ':
@@ -118,60 +147,119 @@ export function limparChavePix(texto: string, tipo: TipoChavePix): string {
     case 'EMAIL':
     case 'ALEATORIA':
       return texto.trim().toLowerCase()
+    default:
+      return texto.trim()
   }
 }
 
-/**
- * Descobre o tipo de uma chave que veio pronta do QR Code -- ali não há
- * ambiguidade que justifique perguntar: o BR Code guarda celular sempre
- * com "+55" na frente, então 11 dígitos secos só podem ser CPF.
- *
- * Devolve null quando não reconhece o formato; quem chama mantém o tipo
- * que já estava escolhido na tela.
- */
-export function detectarTipoChave(chave: string): TipoChavePix | null {
-  const texto = chave.trim()
-  if (!texto) return null
-  if (texto.includes('@')) return 'EMAIL'
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(texto)) return 'ALEATORIA'
-  if (texto.startsWith('+')) return 'CELULAR'
+/** Como escrever o tipo identificado na tela. */
+export const NOME_TIPO_CHAVE: Record<TipoChavePix, string> = {
+  CPF: 'CPF',
+  CNPJ: 'CNPJ',
+  CELULAR: 'Celular',
+  EMAIL: 'E-mail',
+  ALEATORIA: 'Chave aleatória',
+}
 
-  const d = soDigitos(texto)
-  if (d !== texto.replace(/[.\-/() ]/g, '')) return null
-  if (d.length === DIGITOS_CPF) return 'CPF'
-  if (d.length === DIGITOS_CNPJ) return 'CNPJ'
-  return null
+export interface ChavePixIdentificada {
+  /** null = ainda não dá pra afirmar (digitação incompleta ou formato
+   *  irreconhecível). A tela usa isso pra não afirmar besteira. */
+  tipo: TipoChavePix | null
+  /** O que mostrar no campo: formatado quando o tipo já é conhecido, cru
+   *  enquanto não é -- reescrever texto que ainda não se entende só
+   *  atrapalha quem está digitando. */
+  texto: string
+  /** Outra leitura possível dos mesmos dígitos, quando existe (só no caso
+   *  CPF/celular). A tela oferece a troca num toque. */
+  alternativa: TipoChavePix | null
+  /** 11 dígitos que não fecham como CPF nem como celular: quase sempre é
+   *  erro de digitação, e vale avisar antes do dinheiro sair. */
+  suspeita: boolean
+}
+
+const INDEFINIDA: Omit<ChavePixIdentificada, 'texto'> = {
+  tipo: null,
+  alternativa: null,
+  suspeita: false,
 }
 
 /**
- * Tipo que o campo deve assumir sozinho enquanto se digita. Só corrige o
- * caso em que a escolha atual não comporta mais o que foi digitado (passou
- * de 11 dígitos com CPF marcado = é CNPJ), e nunca o contrário: apagar
- * dígitos de um CNPJ não pode ficar trocando o botão marcado embaixo do
- * dedo de quem está digitando.
+ * Descobre sozinha o tipo do que está sendo digitado e devolve já
+ * formatado quando tem certeza.
+ *
+ * A ordem das perguntas vai do mais decisivo pro menos: "@" só existe em
+ * e-mail; letra fora de e-mail só existe em chave aleatória; o resto é
+ * dígito, e aí manda o tamanho -- com o desempate do dígito verificador
+ * nos 11.
+ *
+ * `forcado` é a escolha do motorista quando ele usa a troca oferecida em
+ * `alternativa`; vence a detecção enquanto ele não editar o campo.
  */
-export function ajustarTipoDigitando(texto: string, tipo: TipoChavePix): TipoChavePix {
-  if (tipo === 'CPF' && soDigitos(texto).length > DIGITOS_CPF) return 'CNPJ'
-  if ((tipo === 'CPF' || tipo === 'CNPJ' || tipo === 'CELULAR') && texto.includes('@')) return 'EMAIL'
-  return tipo
-}
+export function identificarChavePix(
+  texto: string,
+  forcado?: TipoChavePix | null,
+): ChavePixIdentificada {
+  const cru = texto.trim()
+  if (!cru) return { ...INDEFINIDA, texto: '' }
 
-/**
- * Prepara pro campo uma chave que veio pronta do QR Code: descobre o tipo
- * e devolve já formatada pra leitura.
- *
- * O "+55" do celular sai antes de formatar -- no BR Code a chave é
- * gravada com ele, mas o campo mostra só DDD + número, como todo mundo
- * escreve. limparChavePix() recoloca na hora de enviar, então dá a volta
- * completa sem perder nada.
- *
- * `tipo` volta null quando o formato não é reconhecido (chave fora do
- * padrão): aí o texto sai como veio e quem chama mantém o tipo que já
- * estava marcado na tela, em vez de reformatar por cima de um palpite.
- */
-export function formatarChaveRecebida(chave: string): { tipo: TipoChavePix | null; texto: string } {
-  const tipo = detectarTipoChave(chave)
-  if (!tipo) return { tipo: null, texto: chave.trim() }
-  const semPrefixo = tipo === 'CELULAR' ? chave.trim().replace(/^\+55/, '') : chave.trim()
-  return { tipo, texto: formatarChavePix(semPrefixo, tipo) }
+  if (forcado) {
+    return { ...INDEFINIDA, tipo: forcado, texto: formatarChavePix(texto, forcado) }
+  }
+
+  if (cru.includes('@')) return { ...INDEFINIDA, tipo: 'EMAIL', texto }
+
+  // Letra (fora de e-mail) só aparece em chave aleatória. Só afirma o
+  // tipo com os 32 hexadecimais completos; antes disso é digitação em
+  // andamento e não há o que formatar.
+  if (/[a-z]/i.test(cru)) {
+    const hex = cru.toLowerCase().replace(/[^0-9a-f]/g, '')
+    if (hex.length === HEX_ALEATORIA) {
+      return { ...INDEFINIDA, tipo: 'ALEATORIA', texto: formatarChavePix(cru, 'ALEATORIA') }
+    }
+    return { ...INDEFINIDA, texto }
+  }
+
+  const d = soDigitos(cru)
+
+  // "+55..." não é coisa que se digite -- chega assim pelo QR Code, e o
+  // próprio prefixo já diz que é celular.
+  if (cru.startsWith('+55') && d.length === 13) {
+    return { ...INDEFINIDA, tipo: 'CELULAR', texto: formatarChavePix(d.slice(2), 'CELULAR') }
+  }
+
+  if (d.length === DIGITOS_CPF) {
+    const ehCpf = cpfValido(d)
+    const ehCelular = pareceCelular(d)
+    if (ehCpf) {
+      // Fecha nos dois: assume CPF (o dígito verificador é evidência bem
+      // mais forte que "começa com DDD e 9") e deixa a troca à mão.
+      return {
+        tipo: 'CPF',
+        texto: formatarChavePix(d, 'CPF'),
+        alternativa: ehCelular ? 'CELULAR' : null,
+        suspeita: false,
+      }
+    }
+    if (ehCelular) {
+      // Sem alternativa aqui: se o dígito verificador não fechou, esses
+      // 11 números não são CPF de ninguém -- oferecer a troca seria
+      // oferecer uma opção que já se sabe errada, em toda digitação de
+      // celular.
+      return { ...INDEFINIDA, tipo: 'CELULAR', texto: formatarChavePix(d, 'CELULAR') }
+    }
+    // Nem uma coisa nem outra -- CPF com dígito trocado, quase sempre.
+    // Não bloqueia nada, só marca pra tela avisar.
+    return { tipo: null, texto: d, alternativa: null, suspeita: true }
+  }
+
+  // Passou de 11 dígitos: CPF e celular estão descartados, só pode ser
+  // CNPJ (e formatarChavePix corta no 14).
+  if (d.length > DIGITOS_CPF) {
+    return { ...INDEFINIDA, tipo: 'CNPJ', texto: formatarChavePix(d, 'CNPJ') }
+  }
+
+  // Menos de 11 dígitos: ainda pode virar CPF, celular ou CNPJ. Segue cru
+  // -- pontuar agora obrigaria a repontuar tudo dois dígitos depois, com
+  // o cursor pulando no meio da digitação.
+  return { ...INDEFINIDA, texto: d }
 }

@@ -2,13 +2,7 @@ import { scanFromURLAsync } from 'expo-camera'
 import { useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
 import { useCapturaComLocal } from '../../camera/useCapturaComLocal'
-import {
-  ajustarTipoDigitando,
-  formatarChavePix,
-  formatarChaveRecebida,
-  limparChavePix,
-  type TipoChavePix,
-} from '../../lib/chavePix'
+import { identificarChavePix, limparChavePix, type TipoChavePix } from '../../lib/chavePix'
 import { lerChavePix } from '../../lib/pixBrCode'
 import type { CategoriaSolicitacao, Veiculo } from '../../lib/tipos'
 import { TIPO_NOVA_SOLICITACAO, type FotoPayload, type NovaSolicitacaoPayload } from '../../outbox/handlers/novaSolicitacao'
@@ -49,14 +43,14 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   const [litros, setLitros] = useState('')
   const [precoLitro, setPrecoLitro] = useState('')
   const [tipoCombustivel, setTipoCombustivel] = useState('')
-  /** Guarda a chave JÁ FORMATADA (com pontuação) -- é o que aparece no
-   *  campo. A versão sem pontuação só é montada no envio, por
-   *  limparChavePix(). */
-  const [chavePix, setChavePix] = useState('')
-  /** Tipo escolhido nos botões da tela: é ele que decide a máscara. CPF e
-   *  celular têm os mesmos 11 dígitos, então não dá pra deduzir do que
-   *  foi digitado -- tem que ser escolha explícita, como no app do banco. */
-  const [tipoChavePix, setTipoChavePix] = useState<TipoChavePix>('CPF')
+  /** Texto cru da chave, como entrou (digitado ou lido do QR). Tudo o
+   *  mais -- máscara, tipo, avisos -- é derivado dele logo abaixo, então
+   *  não há como o campo e o tipo saírem de sincronia. */
+  const [textoChavePix, setTextoChavePix] = useState('')
+  /** Só é preenchido quando o motorista usa a troca oferecida no caso
+   *  ambíguo (11 dígitos que fecham como CPF e como celular). Volta a
+   *  null assim que ele edita o campo -- a partir daí a detecção manda. */
+  const [tipoForcadoChavePix, setTipoForcadoChavePix] = useState<TipoChavePix | null>(null)
   /** Como a chave atual chegou no campo -- só pra tela poder explicar
    *  ("lida do QR Code") ou avisar que o QR não trazia chave. Volta a
    *  'digitada' assim que o motorista edita o campo na mão. */
@@ -66,6 +60,12 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   const [fotos, setFotos] = useState<FotoCapturada[]>([])
   const [enviando, setEnviando] = useState(false)
   const { capturando, capturar } = useCapturaComLocal()
+
+  // Derivado, não guardado: o tipo sai do próprio texto a cada render.
+  // identificarChavePix() é idempotente (reconhece tanto "12345678901"
+  // quanto "123.456.789-01"), então reaplicar no valor já formatado dá
+  // sempre o mesmo resultado.
+  const chaveIdentificada = identificarChavePix(textoChavePix, tipoForcadoChavePix)
 
   // Só em ABASTECIMENTO: com litros e preço por litro exatos, pedir mais
   // um "valor estimado" digitado à parte só criaria divergência -- o
@@ -150,12 +150,12 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     if (resultado.tipo === 'chave') {
       // QR dá a chave em dado digital, não em leitura de imagem -- não há
       // risco de trocar dígito, diferente de tentar ler texto de uma foto.
-      if (!chavePix.trim()) {
-        // Vem sem ambiguidade (celular sempre com +55 no BR Code), então
-        // aqui dá pra acertar o tipo sozinho e já mostrar formatado.
-        const { tipo, texto } = formatarChaveRecebida(resultado.chave)
-        setChavePix(texto)
-        if (tipo) setTipoChavePix(tipo)
+      if (!textoChavePix.trim()) {
+        // Entra crua: identificarChavePix() já entende o "+55" que o BR
+        // Code sempre grava no celular, então o tipo sai certo sozinho e
+        // o campo mostra formatado no mesmo render.
+        setTextoChavePix(resultado.chave)
+        setTipoForcadoChavePix(null)
         setOrigemChavePix('qr')
       }
     } else if (resultado.tipo === 'dinamico') {
@@ -166,22 +166,19 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     }
   }
 
-  /** Digitar na mão sempre vence a leitura automática. */
+  /** Digitar na mão sempre vence a leitura automática -- e desfaz também
+   *  uma troca de tipo feita antes, porque o número mudou. */
   function alterarChavePix(valor: string) {
-    // O tipo se ajusta antes da máscara: quem digita um CNPJ com "CPF"
-    // marcado veria o 12º dígito ser recusado se a ordem fosse a inversa.
-    const tipoAjustado = ajustarTipoDigitando(valor, tipoChavePix)
-    setTipoChavePix(tipoAjustado)
-    setChavePix(formatarChavePix(valor, tipoAjustado))
+    setTextoChavePix(valor)
+    setTipoForcadoChavePix(null)
     setOrigemChavePix('digitada')
   }
 
-  /** Trocar o tipo no botão reformata o que já está escrito -- os dígitos
-   *  são os mesmos, só a pontuação muda (CPF <-> celular é a troca comum,
-   *  já que os dois têm 11 dígitos). */
-  function alterarTipoChavePix(tipo: TipoChavePix) {
-    setTipoChavePix(tipo)
-    setChavePix((atual) => formatarChavePix(atual, tipo))
+  /** Aceita a outra leitura possível dos mesmos dígitos, no único caso em
+   *  que a detecção não tem como decidir sozinha (11 dígitos que fecham
+   *  como CPF e como celular ao mesmo tempo). */
+  function trocarTipoChavePix() {
+    if (chaveIdentificada.alternativa) setTipoForcadoChavePix(chaveIdentificada.alternativa)
   }
 
   /** Remove uma foto de slot fixo já tirada (hoje só a do PIX, que é
@@ -228,7 +225,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
       // Sem pontuação e com o "+55" do celular: é assim que a chave está
       // registrada no Banco Central. Mandar a versão formatada da tela
       // quebraria o pagamento do outro lado.
-      chavePix: limparChavePix(chavePix, tipoChavePix) || null,
+      chavePix: limparChavePix(chaveIdentificada.texto, chaveIdentificada.tipo) || null,
       fotos: fotos.map<FotoPayload>((f) => ({
         uriLocal: f.uriLocal,
         tipo: f.tipoFoto,
@@ -271,8 +268,10 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     litros,
     precoLitro,
     tipoCombustivel,
-    chavePix,
-    tipoChavePix,
+    chavePix: chaveIdentificada.texto,
+    tipoChavePix: chaveIdentificada.tipo,
+    alternativaChavePix: chaveIdentificada.alternativa,
+    chavePixSuspeita: chaveIdentificada.suspeita,
     origemChavePix,
     valorAbastecimento,
     fotos,
@@ -289,7 +288,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     setPrecoLitro,
     setTipoCombustivel,
     setChavePix: alterarChavePix,
-    setTipoChavePix: alterarTipoChavePix,
+    trocarTipoChavePix,
     tirarFotoSlot,
     removerFotoSlot,
     tirarFotoMultipla,

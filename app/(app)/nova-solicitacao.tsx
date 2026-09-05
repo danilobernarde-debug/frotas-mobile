@@ -19,7 +19,7 @@ import { PreviaMarcaDagua } from '../../src/camera/PreviaMarcaDagua'
 import { SLOTS_ABASTECIMENTO } from '../../src/features/chat/fluxo'
 import { useFormularioSolicitacao } from '../../src/features/chat/useFormularioSolicitacao'
 import { useVeiculos } from '../../src/features/veiculos/useVeiculos'
-import { TIPOS_CHAVE_PIX } from '../../src/lib/chavePix'
+import { NOME_TIPO_CHAVE } from '../../src/lib/chavePix'
 import { moeda } from '../../src/lib/formato'
 import { TIPOS_COMBUSTIVEL, type CategoriaSolicitacao } from '../../src/lib/tipos'
 
@@ -44,10 +44,6 @@ export default function TelaNovaSolicitacao() {
   const categoria: CategoriaSolicitacao = categoriaParam ?? 'MANUTENÇÃO'
 
   const formulario = useFormularioSolicitacao(categoria)
-  // Placeholder e teclado seguem o tipo de chave marcado -- teclado
-  // numérico pra CPF/CNPJ/celular poupa o motorista de caçar os números.
-  const tipoChaveAtual =
-    TIPOS_CHAVE_PIX.find((t) => t.tipo === formulario.tipoChavePix) ?? TIPOS_CHAVE_PIX[0]
   const { veiculos } = useVeiculos()
   const [buscaVeiculo, setBuscaVeiculo] = useState('')
   // A frota real tem mais de 100 veículos -- lista sempre aberta faria
@@ -303,35 +299,43 @@ export default function TelaNovaSolicitacao() {
             )}
           </View>
 
-          {/* Tipo escolhido à mão porque CPF e celular têm os mesmos 11
-              dígitos -- não dá pra deduzir da digitação. Quando a chave
-              vem do QR Code o botão certo já se marca sozinho. */}
+          {/* Um campo só, sem escolher o tipo: a pontuação aparece
+              sozinha quando o formato fica claro. Teclado comum de
+              propósito -- o numérico seria mais confortável pros números,
+              mas trancaria quem vai digitar e-mail ou chave aleatória, e
+              daqui não dá pra saber qual dos dois vem. */}
           <Text style={styles.rotulo}>Chave PIX</Text>
-          <View style={styles.listaVeiculos}>
-            {TIPOS_CHAVE_PIX.map((t) => (
-              <Pressable
-                key={t.tipo}
-                onPress={() => formulario.setTipoChavePix(t.tipo)}
-                style={[styles.chip, formulario.tipoChavePix === t.tipo && styles.chipSelecionado]}
-              >
-                <Text
-                  style={[styles.chipTexto, formulario.tipoChavePix === t.tipo && styles.chipTextoSelecionado]}
-                >
-                  {t.rotulo}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
           <TextInput
             style={styles.input}
             value={formulario.chavePix}
             onChangeText={formulario.setChavePix}
-            placeholder={tipoChaveAtual.placeholder}
+            placeholder="CPF, CNPJ, celular, e-mail ou chave aleatória"
             placeholderTextColor="#94a3b8"
-            keyboardType={tipoChaveAtual.teclado}
             autoCapitalize="none"
             autoCorrect={false}
           />
+          {/* Dizer o que foi reconhecido é o que substitui os botões de
+              tipo: o motorista confere o resultado em vez de declarar a
+              intenção antes. */}
+          {formulario.tipoChavePix && (
+            <Text style={styles.avisoBom}>
+              ✓ Reconhecido como {NOME_TIPO_CHAVE[formulario.tipoChavePix]}
+            </Text>
+          )}
+          {/* Único caso que nenhuma regra local decide: 11 dígitos que
+              fecham como CPF e também como celular. */}
+          {formulario.alternativaChavePix && (
+            <Pressable onPress={formulario.trocarTipoChavePix} hitSlop={8}>
+              <Text style={styles.linkTirarNovo}>
+                É um {NOME_TIPO_CHAVE[formulario.alternativaChavePix].toLowerCase()}? Trocar
+              </Text>
+            </Pressable>
+          )}
+          {formulario.chavePixSuspeita && (
+            <Text style={styles.aviso}>
+              Confira: esses 11 números não formam um CPF válido nem um celular.
+            </Text>
+          )}
           {/* O motorista precisa saber de onde veio o que está no campo --
               principalmente pra conferir antes de enviar, já que é pra
               onde o dinheiro vai. */}
