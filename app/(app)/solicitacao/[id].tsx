@@ -5,6 +5,10 @@ import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  // Clipboard: saiu do núcleo do RN mas ainda funciona (só avisa de
+  // depreciação) -- mesma escolha já feita no chat, pra não somar
+  // expo-clipboard, que é módulo nativo e exigiria recompilar o app.
+  Clipboard,
   Image,
   Modal,
   Pressable,
@@ -128,6 +132,9 @@ export default function TelaDetalheSolicitacao() {
   const [corrigindoAbastecimento, setCorrigindoAbastecimento] = useState(false)
   const [editandoPix, setEditandoPix] = useState(false)
   const [salvandoPix, setSalvandoPix] = useState(false)
+  /** Vira ✓ por alguns segundos depois de copiar -- sem isso não há como
+   *  saber que o toque fez alguma coisa. */
+  const [chaveCopiada, setChaveCopiada] = useState(false)
   const chave = useChavePix()
 
   const ehMinha = Boolean(perfil?.id && aprovacao?.solicitante_id === perfil.id)
@@ -315,6 +322,17 @@ export default function TelaDetalheSolicitacao() {
     // A foto vai junto de qualquer jeito: mesmo sem QR legível ela é o
     // registro que quem paga confere contra a chave digitada.
     await anexarUri('PIX', captura.uriLocal)
+  }
+
+  function copiarChave() {
+    if (!aprovacao?.chave_pix) return
+    // Copia a forma CANÔNICA (a gravada), não a formatada da tela: é a
+    // que está registrada no Banco Central, e é ela que o aplicativo do
+    // banco aceita sem discussão -- celular, por exemplo, vai com o +55
+    // que a máscara esconde.
+    Clipboard.setString(aprovacao.chave_pix)
+    setChaveCopiada(true)
+    setTimeout(() => setChaveCopiada(false), 2500)
   }
 
   async function salvarChavePix() {
@@ -862,10 +880,21 @@ export default function TelaDetalheSolicitacao() {
                   duas telas mostram a chave igual. */}
               {aprovacao.chave_pix ? (
                 <>
-                  <Text style={styles.chavePix} selectable>
-                    {formatarChaveGravada(aprovacao.chave_pix)}
+                  <View style={styles.linhaChavePix}>
+                    <Text style={styles.chavePix} selectable>
+                      {formatarChaveGravada(aprovacao.chave_pix)}
+                    </Text>
+                    <Pressable onPress={copiarChave} hitSlop={12} style={styles.botaoCopiar}>
+                      <Ionicons
+                        name={chaveCopiada ? 'checkmark' : 'copy-outline'}
+                        size={22}
+                        color={chaveCopiada ? '#047857' : '#0d9488'}
+                      />
+                    </Pressable>
+                  </View>
+                  <Text style={styles.dicaPix}>
+                    {chaveCopiada ? 'Chave copiada.' : 'Toque no ícone para copiar.'}
                   </Text>
-                  <Text style={styles.dicaPix}>Toque e segure para copiar.</Text>
                 </>
               ) : (
                 <Text style={styles.dicaPix}>
@@ -1258,9 +1287,13 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   rotuloPix: { fontSize: 12, fontWeight: '700', color: '#0f766e', textTransform: 'uppercase', letterSpacing: 0.4 },
-  chavePix: { fontSize: 17, fontWeight: '700', color: '#0f172a', marginTop: 6 },
+  // flex: 1 -- chave aleatória tem 36 caracteres e, sem isso, empurraria
+  // o ícone de copiar pra fora da tela.
+  chavePix: { flex: 1, fontSize: 17, fontWeight: '700', color: '#0f172a', marginTop: 6 },
   dicaPix: { fontSize: 12, color: '#64748b', marginTop: 6 },
   linkPix: { fontSize: 14, fontWeight: '700', color: '#0d9488', marginTop: 10 },
+  linhaChavePix: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  botaoCopiar: { padding: 4 },
   linhaFotosPix: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   fotoPix: { width: 84, height: 84, borderRadius: 8, backgroundColor: '#e2e8f0' },
   fotoPixVazia: { borderWidth: 1, borderColor: '#e2e8f0' },
