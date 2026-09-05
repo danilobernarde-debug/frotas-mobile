@@ -820,11 +820,16 @@ export default function TelaDetalheSolicitacao() {
               acima, e quem precisar ajustar reabre aqui. */}
           {podeCompletarAbastecimento && !mostrarFormAbastecimento && (
             <Pressable onPress={() => setCorrigindoAbastecimento(true)} hitSlop={8}>
-              <Text style={styles.linkPix}>Corrigir dados do abastecimento</Text>
+              <Text style={styles.linkPix}>Corrigir dados ou chave PIX</Text>
             </Pressable>
           )}
 
-          {aprovacao.chave_pix && !editandoPix && !mostrarFormAbastecimento && (
+          {/* Quadro avulso do PIX só onde não existe o formulário de
+              abastecimento (manutenção, ou solicitação já paga). No
+              abastecimento a chave é o passo 5 lá dentro -- dois lugares
+              pra corrigir a mesma coisa, cada um com seu botão de salvar,
+              era o que confundia. */}
+          {aprovacao.chave_pix && !editandoPix && (
             <View style={styles.blocoPix}>
               <Text style={styles.rotuloPix}>Chave PIX informada pelo motorista</Text>
               {/* selectable: quem paga precisa copiar a chave (toque
@@ -841,7 +846,7 @@ export default function TelaDetalheSolicitacao() {
                 {formatarChaveGravada(aprovacao.chave_pix)}
               </Text>
               <Text style={styles.dicaPix}>Toque e segure para copiar.</Text>
-              {podeInformarPix && (
+              {podeInformarPix && !podeCompletarAbastecimento && (
                 <Pressable
                   onPress={() => {
                     chave.definir(aprovacao.chave_pix ?? '')
@@ -859,7 +864,7 @@ export default function TelaDetalheSolicitacao() {
               DEPOIS da solicitação -- o frentista foi buscar o QR, o dono
               não estava, o sinal caiu na hora de digitar. Antes disso a
               única saída era pedir pra gestão digitar por ele. */}
-          {!aprovacao.chave_pix && !editandoPix && podeInformarPix && !mostrarFormAbastecimento && (
+          {!aprovacao.chave_pix && !editandoPix && podeInformarPix && !podeCompletarAbastecimento && (
             <View style={styles.blocoPix}>
               <Text style={styles.rotuloPix}>Chave PIX</Text>
               <Text style={styles.dicaPix}>
