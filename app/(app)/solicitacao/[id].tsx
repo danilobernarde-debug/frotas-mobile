@@ -171,6 +171,16 @@ export default function TelaDetalheSolicitacao() {
    */
   const mostrarFormAbastecimento =
     podeCompletarAbastecimento && (corrigindoAbastecimento || !abastecimentoPreenchido)
+  /**
+   * A chave é passo do formulário só no PREENCHIMENTO -- ali ela não
+   * existe ainda e faz parte da mesma ida ao posto. Na CORREÇÃO ela já
+   * está na ficha, e mostrá-la de novo como campo repetiria na tela algo
+   * que está dois dedos acima. Lá a edição fica no próprio quadro que
+   * exibe a chave.
+   */
+  const pixNoFormulario = ehMinha && !abastecimentoPreenchido
+  /** As fotos são o passo 5 ou o 6, conforme a chave ocupe um número. */
+  const passoFotos = pixNoFormulario ? 6 : 5
   const litrosNum = paraNumero(litros)
   const totalAbastecimento = paraNumero(valorPago)
   const precoPorLitro = litrosNum > 0 ? totalAbastecimento / litrosNum : 0
@@ -382,7 +392,11 @@ export default function TelaDetalheSolicitacao() {
     if (!aprovacao) return
     setSalvandoDados(true)
     const dados = {
-      chave_pix: chave.paraGravar() || null,
+      // A chave só entra quando ela é passo DESTE formulário. Na correção
+      // ela é editada no próprio quadro que a exibe, e mandá-la aqui
+      // significaria reescrever por cima de um campo que este salvamento
+      // nem mostrou.
+      ...(pixNoFormulario ? { chave_pix: chave.paraGravar() || null } : {}),
       litros: litrosNum || null,
       // Derivado do que foi pago. 4 casas é o que a coluna guarda, e é
       // precisão de sobra: o erro no total volta em menos de um centavo
@@ -758,7 +772,7 @@ export default function TelaDetalheSolicitacao() {
               {/* PIX dentro do formulário: é a mesma ida ao posto, e ter
                   dois quadros separados fazia parecer duas tarefas -- com
                   dois botões de salvar, e um deles fácil de esquecer. */}
-              {ehMinha && (
+              {pixNoFormulario && (
                 <>
                   <Text style={styles.passo}>5. Chave PIX de quem recebe</Text>
                   <Pressable
@@ -778,7 +792,7 @@ export default function TelaDetalheSolicitacao() {
 
               {ehMinha && (
                 <>
-                  <Text style={styles.passo}>6. Tire as 3 fotos</Text>
+                  <Text style={styles.passo}>{passoFotos}. Tire as 3 fotos</Text>
                   {SLOTS_ABASTECIMENTO.map((slot) => {
                     const anexo = anexos.find((a) => a.tipo === slot.tipoFoto)
                     const subindo = enviando === slot.tipoFoto
@@ -820,7 +834,7 @@ export default function TelaDetalheSolicitacao() {
               acima, e quem precisar ajustar reabre aqui. */}
           {podeCompletarAbastecimento && !mostrarFormAbastecimento && (
             <Pressable onPress={() => setCorrigindoAbastecimento(true)} hitSlop={8}>
-              <Text style={styles.linkPix}>Corrigir dados ou chave PIX</Text>
+              <Text style={styles.linkPix}>Corrigir dados do abastecimento</Text>
             </Pressable>
           )}
 
@@ -846,7 +860,7 @@ export default function TelaDetalheSolicitacao() {
                 {formatarChaveGravada(aprovacao.chave_pix)}
               </Text>
               <Text style={styles.dicaPix}>Toque e segure para copiar.</Text>
-              {podeInformarPix && !podeCompletarAbastecimento && (
+              {podeInformarPix && (
                 <Pressable
                   onPress={() => {
                     chave.definir(aprovacao.chave_pix ?? '')
@@ -854,7 +868,7 @@ export default function TelaDetalheSolicitacao() {
                   }}
                   hitSlop={8}
                 >
-                  <Text style={styles.linkPix}>Corrigir chave</Text>
+                  <Text style={styles.linkPix}>Editar chave PIX</Text>
                 </Pressable>
               )}
             </View>
