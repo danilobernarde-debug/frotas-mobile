@@ -12,6 +12,47 @@ import type { Aprovacao, Mensagem } from '../../lib/tipos'
  * espaço, dá pra podar por data depois.
  */
 
+/**
+ * Versão do FORMATO das linhas guardadas em cache_aprovacoes.
+ *
+ * O cache guarda a linha do servidor como JSON, então coluna nova não
+ * exige mudança de schema aqui -- mas as linhas JÁ gravadas continuam com
+ * o formato antigo, e a busca incremental (`atualizado_em > maior em
+ * cache`) nunca mais volta nelas. Na prática, campo novo só aparecia em
+ * solicitação que voltasse a ser alterada depois da atualização do app.
+ *
+ * Foi exatamente o que aconteceu ao passar a trazer `anexos` junto: as
+ * solicitações já pagas seguiam sem o aviso de comprovante no card, e o
+ * recurso parecia quebrado no aparelho de quem já usava o app.
+ *
+ * SUBA ESTE NÚMERO sempre que mudar o que SELECT_APROVACOES pede
+ * (useMinhasSolicitacoes). Isso força UMA recarga da janela recente, que
+ * regrava as linhas no formato novo. Nada é apagado -- a regravação é um
+ * upsert por id, então solicitação antiga fora da janela continua no
+ * cache do jeito que estava.
+ *
+ * 1 = versão inicial, com `anexos` (tipos) embutido na linha.
+ */
+export const VERSAO_CACHE_APROVACOES = 1
+
+/** Se o cache foi gravado por uma versão anterior do app -- quem chama
+ *  usa isto pra ignorar o cursor incremental UMA vez. */
+export async function cacheAprovacoesDesatualizado(): Promise<boolean> {
+  const db = await obterBanco()
+  const linha = await db.getFirstAsync<{ user_version: number }>('pragma user_version')
+  return (linha?.user_version ?? 0) < VERSAO_CACHE_APROVACOES
+}
+
+/** Só depois da recarga ter dado certo -- marcar antes deixaria o cache
+ *  meio velho marcado como novo se a rede falhasse no meio. */
+export async function marcarCacheAprovacoesAtualizado(): Promise<void> {
+  const db = await obterBanco()
+  // Em chamada própria, não junto de outro execAsync: no iOS o execAsync
+  // envolve o texto todo numa transação (ver o comentário do
+  // journal_mode em outbox/db.ts), e pragma é melhor manter fora disso.
+  await db.execAsync(`pragma user_version = ${VERSAO_CACHE_APROVACOES}`)
+}
+
 /** `encarregadoId` filtra a leitura pra thread de UMA pessoa só -- usado
  *  pela conversa que um GESTOR/ADMIN abre pra ver alguém específico
  *  (conversas/[id].tsx). O cache guarda a linha inteira como JSON (sem

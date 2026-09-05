@@ -9,12 +9,14 @@ import { listarTodos } from '../../outbox/outbox'
 import { assinarEstadoSync } from '../../outbox/syncEngine'
 import type { OutboxItem } from '../../outbox/types'
 import {
+  cacheAprovacoesDesatualizado,
   gravarAprovacoesNoCache,
   gravarMensagensNoCache,
   lerCacheAprovacoes,
   lerCacheMensagens,
   maiorAtualizadoEmAprovacoes,
   maiorCriadoEmMensagens,
+  marcarCacheAprovacoesAtualizado,
 } from './cacheChat'
 import type { EntradaChatReal } from './types'
 
@@ -124,8 +126,14 @@ export function useMinhasSolicitacoes(encarregadoId?: string) {
    *  primeira carga com cache vazio) e mescla no cache local + na tela. */
   const buscarNovidades = useCallback(async () => {
     if (!perfil) return
+    // Cache gravado por uma versão anterior do app não tem os campos que
+    // a consulta pede hoje, e a busca incremental nunca voltaria nessas
+    // linhas (o cursor já passou delas). Ignorar o cursor uma vez faz a
+    // janela recente ser regravada no formato novo -- ver
+    // VERSAO_CACHE_APROVACOES.
+    const formatoAntigo = await cacheAprovacoesDesatualizado()
     const [desdeAprovacoes, desdeMensagens] = await Promise.all([
-      maiorAtualizadoEmAprovacoes(encarregadoId),
+      formatoAntigo ? null : maiorAtualizadoEmAprovacoes(encarregadoId),
       maiorCriadoEmMensagens(encarregadoId),
     ])
 
@@ -158,6 +166,9 @@ export function useMinhasSolicitacoes(encarregadoId?: string) {
     // vazio e 3 erros empilhavam na tela).
     await gravarAprovacoesNoCache(novasAprovacoes)
     await gravarMensagensNoCache(novasMensagens)
+    // Só depois da gravação ter dado certo: marcar antes deixaria o cache
+    // meio velho carimbado como novo se a rede tivesse falhado acima.
+    if (formatoAntigo && !respostaAprovacoes.error) await marcarCacheAprovacoesAtualizado()
     await publicarEntradas()
   }, [perfil, encarregadoId, publicarEntradas])
 
