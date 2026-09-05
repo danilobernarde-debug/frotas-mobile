@@ -665,7 +665,21 @@ export default function TelaDetalheSolicitacao() {
                   ajuda que existiam aqui saíram a pedido do usuário --
                   carregavam a tela; a orientação ficou no exemplo dentro
                   do próprio campo, que só aparece enquanto está vazio. */}
-              <Text style={styles.passo}>1. Qual combustível?</Text>
+              {/* KM primeiro: é o número que se lê ao chegar, antes de
+                  encostar na bomba -- pedir depois obrigava a voltar ao
+                  painel do carro com a mangueira já guardada. */}
+              <Text style={styles.passo}>1. KM do painel</Text>
+              <TextInput
+                style={styles.campo}
+                value={odometro}
+                onChangeText={setOdometro}
+                keyboardType="decimal-pad"
+                inputAccessoryViewID={ID_BARRA_TECLADO}
+                placeholder="Ex.: 128500 km"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.passo}>2. Qual combustível?</Text>
               <View style={styles.linhaChips}>
                 {TIPOS_COMBUSTIVEL.map((c) => (
                   <Pressable
@@ -678,7 +692,7 @@ export default function TelaDetalheSolicitacao() {
                 ))}
               </View>
 
-              <Text style={styles.passo}>2. Quantos litros?</Text>
+              <Text style={styles.passo}>3. Quantos litros?</Text>
               <TextInput
                 style={styles.campo}
                 value={litros}
@@ -689,7 +703,7 @@ export default function TelaDetalheSolicitacao() {
                 placeholderTextColor="#94a3b8"
               />
 
-              <Text style={styles.passo}>3. Quanto deu?</Text>
+              <Text style={styles.passo}>4. Quanto deu?</Text>
               <TextInput
                 style={styles.campo}
                 value={valorPago}
@@ -709,16 +723,6 @@ export default function TelaDetalheSolicitacao() {
                 </Text>
               )}
 
-              <Text style={styles.passo}>4. KM do painel</Text>
-              <TextInput
-                style={styles.campo}
-                value={odometro}
-                onChangeText={setOdometro}
-                keyboardType="decimal-pad"
-                inputAccessoryViewID={ID_BARRA_TECLADO}
-                placeholder="Ex.: 128500 km"
-                placeholderTextColor="#94a3b8"
-              />
 
               {/* O teto vira comparação, não aviso solto: ao lado do que
                   ele acabou de digitar é onde a conta importa. */}
