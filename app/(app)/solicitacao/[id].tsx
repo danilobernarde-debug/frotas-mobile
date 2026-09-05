@@ -782,30 +782,6 @@ export default function TelaDetalheSolicitacao() {
                   })}
                 </>
               )}
-
-              {/* Diz o que falta em vez de só ficar apagado: botão
-                  desabilitado sem explicação faz a pessoa tocar de novo
-                  achando que o app travou. */}
-              <Pressable
-                onPress={salvarDadosAbastecimento}
-                disabled={salvandoDados || faltaNoAbastecimento.length > 0}
-                style={[
-                  styles.botaoSalvarLargo,
-                  (salvandoDados || faltaNoAbastecimento.length > 0) && styles.botaoDesabilitado,
-                ]}
-              >
-                {salvandoDados ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.botaoPixTexto}>
-                    {faltaNoAbastecimento.length > 0
-                      ? `Falta preencher: ${faltaNoAbastecimento.join(', ')}`
-                      : ehMinha
-                        ? 'Salvar e enviar para a gestão'
-                        : 'Salvar correção'}
-                  </Text>
-                )}
-              </Pressable>
             </View>
           )}
 
@@ -938,6 +914,37 @@ export default function TelaDetalheSolicitacao() {
             aoEnviar={() => perguntarFonte('NOTA FISCAL', 'Nota fiscal')}
           />
         </ScrollView>
+      )}
+
+      {/* Barra fixa, como na tela de criação: dentro do formulário o
+          botão já era o último, mas depois dele ainda vêm PIX, galeria,
+          comprovante e nota fiscal -- ele acabava no meio da tela e quem
+          rolava pra ver as fotos perdia o botão de vista. Aqui ele está
+          sempre à mão, e é o mesmo lugar onde o motorista já aprendeu a
+          achar o botão verde que envia. */}
+      {podeCompletarAbastecimento && (
+        <View style={styles.rodapeSalvar}>
+          <Pressable
+            onPress={salvarDadosAbastecimento}
+            disabled={salvandoDados || faltaNoAbastecimento.length > 0}
+            style={[
+              styles.botaoSalvarRodape,
+              (salvandoDados || faltaNoAbastecimento.length > 0) && styles.botaoDesabilitado,
+            ]}
+          >
+            {salvandoDados ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.botaoPixTexto}>
+                {faltaNoAbastecimento.length > 0
+                  ? `Falta preencher: ${faltaNoAbastecimento.join(', ')}`
+                  : ehMinha
+                    ? 'Salvar e enviar para a gestão'
+                    : 'Salvar correção'}
+              </Text>
+            )}
+          </Pressable>
+        </View>
       )}
 
       <BarraTeclado />
@@ -1098,6 +1105,19 @@ const styles = StyleSheet.create({
   iconeVoltar: { fontSize: 22, color: '#0f172a', fontWeight: '600' },
   tituloCabecalho: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   conteudo: { padding: 16 },
+  rodapeSalvar: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    backgroundColor: '#fff',
+  },
+  botaoSalvarRodape: {
+    backgroundColor: '#0d9488',
+    borderRadius: 10,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   centro: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   textoVazio: { color: '#94a3b8' },
   status: { fontSize: 13, fontWeight: '700', color: '#0f766e', marginBottom: 4 },
