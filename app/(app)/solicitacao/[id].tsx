@@ -122,6 +122,9 @@ export default function TelaDetalheSolicitacao() {
   const [tipoCombustivel, setTipoCombustivel] = useState('')
   const [odometro, setOdometro] = useState('')
   const [salvandoDados, setSalvandoDados] = useState(false)
+  /** Aberto à mão -- só pra reabrir o formulário depois de já ter
+   *  salvado. Enquanto os dados não existem ele aparece sozinho. */
+  const [corrigindoAbastecimento, setCorrigindoAbastecimento] = useState(false)
   const [editandoPix, setEditandoPix] = useState(false)
   const [salvandoPix, setSalvandoPix] = useState(false)
   const chave = useChavePix()
@@ -160,6 +163,14 @@ export default function TelaDetalheSolicitacao() {
     aprovada &&
     aprovacao.status_pagamento !== 'PAGO' &&
     (ehMinha || (ehGestao && abastecimentoPreenchido))
+  /**
+   * Formulário só fica na tela enquanto tem o que preencher. Depois de
+   * salvo ele fecha e os números aparecem na ficha acima -- deixar o
+   * formulário aberto sugeria que faltava fazer algo, e ainda escondia o
+   * resultado atrás dos próprios campos.
+   */
+  const mostrarFormAbastecimento =
+    podeCompletarAbastecimento && (corrigindoAbastecimento || !abastecimentoPreenchido)
   const litrosNum = paraNumero(litros)
   const totalAbastecimento = paraNumero(valorPago)
   const precoPorLitro = litrosNum > 0 ? totalAbastecimento / litrosNum : 0
@@ -387,6 +398,7 @@ export default function TelaDetalheSolicitacao() {
       return
     }
     setAprovacao((a) => (a ? ({ ...a, ...dados } as Aprovacao) : a))
+    setCorrigindoAbastecimento(false)
   }
 
   useEffect(() => {
@@ -641,21 +653,18 @@ export default function TelaDetalheSolicitacao() {
             </View>
           )}
 
-          {podeCompletarAbastecimento && (
+          {mostrarFormAbastecimento && (
             <View style={styles.painelLimite}>
               <Text style={styles.painelTitulo}>
                 {ehMinha ? 'Depois de abastecer' : 'Corrigir dados do abastecimento'}
               </Text>
-              <Text style={styles.dicaPix}>
-                {ehMinha
-                  ? 'Copie os números da bomba ou da nota. São 5 passos.'
-                  : 'Ajuste o que o motorista informou errado. O lançamento no controle de consumo acompanha a correção.'}
-              </Text>
 
-              {/* Numerado e com dica de onde achar cada número: quem
-                  preenche está em pé na bomba, com pressa, e nem sempre
-                  acostumado com formulário. Rótulo em forma de pergunta
-                  pede menos interpretação que um substantivo solto. */}
+              {/* Numerado e em forma de pergunta: quem preenche está em
+                  pé na bomba, com pressa, e pergunta pede menos
+                  interpretação que um substantivo solto. As linhas de
+                  ajuda que existiam aqui saíram a pedido do usuário --
+                  carregavam a tela; a orientação ficou no exemplo dentro
+                  do próprio campo, que só aparece enquanto está vazio. */}
               <Text style={styles.passo}>1. Qual combustível?</Text>
               <View style={styles.linhaChips}>
                 {TIPOS_COMBUSTIVEL.map((c) => (
@@ -670,28 +679,24 @@ export default function TelaDetalheSolicitacao() {
               </View>
 
               <Text style={styles.passo}>2. Quantos litros?</Text>
-              <Text style={styles.dicaCampo}>O número de LITROS que apareceu na bomba.</Text>
               <TextInput
                 style={styles.campo}
                 value={litros}
                 onChangeText={setLitros}
                 keyboardType="decimal-pad"
                 inputAccessoryViewID={ID_BARRA_TECLADO}
-                placeholder="Ex.: 40,5"
+                placeholder="Ex.: 40,5 litros"
                 placeholderTextColor="#94a3b8"
               />
 
               <Text style={styles.passo}>3. Quanto deu?</Text>
-              <Text style={styles.dicaCampo}>
-                O valor total que você pagou -- o mesmo que vai pedir no PIX.
-              </Text>
               <TextInput
                 style={styles.campo}
                 value={valorPago}
                 onChangeText={setValorPago}
                 keyboardType="decimal-pad"
                 inputAccessoryViewID={ID_BARRA_TECLADO}
-                placeholder="Ex.: 250,00"
+                placeholder="Ex.: R$ 250,00"
                 placeholderTextColor="#94a3b8"
               />
 
@@ -705,14 +710,13 @@ export default function TelaDetalheSolicitacao() {
               )}
 
               <Text style={styles.passo}>4. KM do painel</Text>
-              <Text style={styles.dicaCampo}>O número grande do hodômetro, sem os decimais.</Text>
               <TextInput
                 style={styles.campo}
                 value={odometro}
                 onChangeText={setOdometro}
                 keyboardType="decimal-pad"
                 inputAccessoryViewID={ID_BARRA_TECLADO}
-                placeholder="Ex.: 128500"
+                placeholder="Ex.: 128500 km"
                 placeholderTextColor="#94a3b8"
               />
 
@@ -745,9 +749,6 @@ export default function TelaDetalheSolicitacao() {
               {ehMinha && (
                 <>
                   <Text style={styles.passo}>5. Tire as 3 fotos</Text>
-                  <Text style={styles.dicaCampo}>
-                    Cada uma é enviada na hora. O botão do fim salva só os números.
-                  </Text>
                   {SLOTS_ABASTECIMENTO.map((slot) => {
                     const anexo = anexos.find((a) => a.tipo === slot.tipoFoto)
                     const subindo = enviando === slot.tipoFoto
@@ -783,6 +784,14 @@ export default function TelaDetalheSolicitacao() {
                 </>
               )}
             </View>
+          )}
+
+          {/* Fechado depois de salvo: os números já aparecem na ficha
+              acima, e quem precisar ajustar reabre aqui. */}
+          {podeCompletarAbastecimento && !mostrarFormAbastecimento && (
+            <Pressable onPress={() => setCorrigindoAbastecimento(true)} hitSlop={8}>
+              <Text style={styles.linkPix}>Corrigir dados do abastecimento</Text>
+            </Pressable>
           )}
 
           {aprovacao.chave_pix && !editandoPix && (
@@ -922,7 +931,7 @@ export default function TelaDetalheSolicitacao() {
           rolava pra ver as fotos perdia o botão de vista. Aqui ele está
           sempre à mão, e é o mesmo lugar onde o motorista já aprendeu a
           achar o botão verde que envia. */}
-      {podeCompletarAbastecimento && (
+      {mostrarFormAbastecimento && (
         <View style={styles.rodapeSalvar}>
           <Pressable
             onPress={salvarDadosAbastecimento}
