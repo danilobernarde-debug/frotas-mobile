@@ -778,18 +778,7 @@ export default function TelaDetalheSolicitacao() {
               {pixNoFormulario && (
                 <>
                   <Text style={styles.passo}>5. Chave PIX de quem recebe</Text>
-                  <Pressable
-                    onPress={lerQrDoPix}
-                    disabled={enviando === 'PIX'}
-                    style={[styles.botaoPix, enviando === 'PIX' && styles.botaoDesabilitado]}
-                  >
-                    {enviando === 'PIX' ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <Text style={styles.botaoPixTexto}>📷 Ler QR Code ou tirar foto</Text>
-                    )}
-                  </Pressable>
-                  <CampoChavePix chave={chave} />
+                  <CampoChavePix chave={chave} aoLerQr={lerQrDoPix} lendoQr={enviando === 'PIX'} />
                 </>
               )}
 
@@ -896,18 +885,7 @@ export default function TelaDetalheSolicitacao() {
           {editandoPix && (
             <View style={styles.blocoPix}>
               <Text style={styles.rotuloPix}>Chave PIX do recebedor</Text>
-              <Pressable
-                onPress={lerQrDoPix}
-                disabled={enviando === 'PIX'}
-                style={[styles.botaoPix, enviando === 'PIX' && styles.botaoDesabilitado]}
-              >
-                {enviando === 'PIX' ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.botaoPixTexto}>📷 Ler QR Code ou tirar foto</Text>
-                )}
-              </Pressable>
-              <CampoChavePix chave={chave} />
+              <CampoChavePix chave={chave} aoLerQr={lerQrDoPix} lendoQr={enviando === 'PIX'} />
               <View style={styles.acoesPix}>
                 <Pressable onPress={() => setEditandoPix(false)} hitSlop={8} disabled={salvandoPix}>
                   <Text style={styles.linkPixFraco}>Cancelar</Text>
