@@ -398,3 +398,36 @@ function identificarSozinho(texto: string): ChavePixIdentificada {
   // o cursor pulando no meio da digitação.
   return { ...INDEFINIDA, texto: d }
 }
+
+/**
+ * Formata pra LEITURA uma chave que já está gravada.
+ *
+ * Diferente de identificarChavePix(), que serve à digitação e decide pelo
+ * que é VÁLIDO -- ali um CPF com dígito trocado fica sem máscara de
+ * propósito, porque a falta dela acompanha o aviso de conferir. Aqui a
+ * chave já foi conferida e salva, e o que importa é conseguir ler: onze
+ * dígitos secos não se conferem de bater o olho, e conferir é o que quem
+ * paga faz antes de mandar o dinheiro.
+ *
+ * Formata pelo FORMATO, portanto, não pela validade -- e é essa mesma
+ * regra que frotas-web/src/lib/chavePix.ts aplica, pras duas telas
+ * mostrarem a mesma chave igual.
+ */
+export function formatarChaveGravada(chave: string | null | undefined): string {
+  const texto = (chave ?? '').trim()
+  if (!texto) return ''
+  if (texto.includes('@') || /[a-z]/i.test(texto)) return texto
+
+  if (texto.startsWith('+55')) {
+    const d = soDigitos(texto).slice(2)
+    return d.length === DIGITOS_CELULAR ? formatarChavePix(d, 'CELULAR') : texto
+  }
+
+  const d = soDigitos(texto)
+  // Já veio pontuada (chave antiga, gravada antes da máscara existir):
+  // repontuar por cima só embaralharia.
+  if (d.length !== texto.length) return texto
+  if (d.length === DIGITOS_CPF) return formatarChavePix(d, 'CPF')
+  if (d.length === DIGITOS_CNPJ) return formatarChavePix(d, 'CNPJ')
+  return texto
+}

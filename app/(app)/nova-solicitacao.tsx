@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { FotoAmpliada } from '../../src/camera/FotoAmpliada'
 import { PreviaMarcaDagua } from '../../src/camera/PreviaMarcaDagua'
 import { CampoChavePix } from '../../src/features/pix/CampoChavePix'
+import { BarraTeclado, ID_BARRA_TECLADO } from '../../src/ui/BarraTeclado'
 import { useFormularioSolicitacao } from '../../src/features/chat/useFormularioSolicitacao'
 import { useVeiculos } from '../../src/features/veiculos/useVeiculos'
 import { duracaoAudio, moeda } from '../../src/lib/formato'
@@ -74,7 +75,13 @@ export default function TelaNovaSolicitacao() {
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.conteudo}
+          keyboardShouldPersistTaps="handled"
+          // Arrastar a lista fecha o teclado -- segunda saída, além do
+          // "Concluído" da BarraTeclado.
+          keyboardDismissMode="on-drag"
+        >
           {formulario.motoristaNome && (
             <Text style={styles.motoristaVinculado}>🚗 Motorista: {formulario.motoristaNome}</Text>
           )}
@@ -202,6 +209,7 @@ export default function TelaNovaSolicitacao() {
                 value={formulario.valor}
                 onChangeText={formulario.setValor}
                 keyboardType="decimal-pad"
+                inputAccessoryViewID={ID_BARRA_TECLADO}
                 placeholder="R$"
                 placeholderTextColor="#94a3b8"
               />
@@ -326,6 +334,8 @@ export default function TelaNovaSolicitacao() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      <BarraTeclado />
 
       <Modal visible={fotoAberta !== null} transparent animationType="fade" onRequestClose={() => setFotoAberta(null)}>
         <Pressable style={styles.fundoModalFoto} onPress={() => setFotoAberta(null)}>

@@ -18,12 +18,14 @@ import { useAuth } from '../../../src/auth/useAuth'
 import { capturarFoto, capturarFotoComQr, removerFotoLocal } from '../../../src/camera/capturarFoto'
 import { escolherImagemChat } from '../../../src/camera/escolherImagemChat'
 import { CampoChavePix } from '../../../src/features/pix/CampoChavePix'
+import { formatarChaveGravada } from '../../../src/lib/chavePix'
 import { useChavePix } from '../../../src/features/pix/useChavePix'
 import { data as fmtData, moeda } from '../../../src/lib/formato'
 import { lerChavePix } from '../../../src/lib/pixBrCode'
 import { enviarAnexo, urlAnexo } from '../../../src/lib/api'
 import { supabase } from '../../../src/lib/supabase'
 import { SLOTS_ABASTECIMENTO } from '../../../src/features/chat/fluxo'
+import { BarraTeclado, ID_BARRA_TECLADO } from '../../../src/ui/BarraTeclado'
 import { TIPOS_COMBUSTIVEL, type AnexoAprovacao, type Aprovacao, type TipoAnexo } from '../../../src/lib/tipos'
 
 /** Aceita vírgula decimal, como o teclado brasileiro oferece. */
@@ -454,7 +456,12 @@ export default function TelaDetalheSolicitacao() {
           <Text style={styles.textoVazio}>Solicitação não encontrada.</Text>
         </View>
       ) : (
-        <ScrollView style={styles.tela} contentContainerStyle={styles.conteudo}>
+        <ScrollView
+          style={styles.tela}
+          contentContainerStyle={styles.conteudo}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           <Text style={styles.status}>
             {ROTULO_STATUS[aprovacao.status]}
             {aprovada && aprovacao.status_pagamento !== 'NÃO SE APLICA'
@@ -536,6 +543,7 @@ export default function TelaDetalheSolicitacao() {
                 value={limiteTexto}
                 onChangeText={setLimiteTexto}
                 keyboardType="decimal-pad"
+                inputAccessoryViewID={ID_BARRA_TECLADO}
                 placeholder={limiteEm === 'VALOR' ? 'R$ 300,00' : '40 litros'}
                 placeholderTextColor="#94a3b8"
               />
@@ -642,6 +650,7 @@ export default function TelaDetalheSolicitacao() {
                 value={litros}
                 onChangeText={setLitros}
                 keyboardType="decimal-pad"
+                inputAccessoryViewID={ID_BARRA_TECLADO}
                 placeholder="Ex.: 40,5"
                 placeholderTextColor="#94a3b8"
               />
@@ -652,6 +661,7 @@ export default function TelaDetalheSolicitacao() {
                 value={precoLitro}
                 onChangeText={setPrecoLitro}
                 keyboardType="decimal-pad"
+                inputAccessoryViewID={ID_BARRA_TECLADO}
                 placeholder="R$"
                 placeholderTextColor="#94a3b8"
               />
@@ -662,6 +672,7 @@ export default function TelaDetalheSolicitacao() {
                 value={odometro}
                 onChangeText={setOdometro}
                 keyboardType="decimal-pad"
+                inputAccessoryViewID={ID_BARRA_TECLADO}
                 placeholder="Ex.: 128500"
                 placeholderTextColor="#94a3b8"
               />
@@ -691,6 +702,15 @@ export default function TelaDetalheSolicitacao() {
                   que a gestão "corrija" numa foto de um posto onde não
                   esteve -- refazer, só voltando à bomba. */}
               {ehMinha && <Text style={styles.rotuloCampo}>Fotos do abastecimento</Text>}
+              {/* Foto sobe no ato (anexarUri faz o upload na hora), número
+                  só com o botão -- e os dois no mesmo quadro faziam
+                  parecer que o botão salvava tudo. Dito aqui porque a
+                  dúvida já apareceu na prática. */}
+              {ehMinha && (
+                <Text style={styles.dicaPix}>
+                  Cada foto é enviada assim que você tira. O botão abaixo salva só os números.
+                </Text>
+              )}
               {ehMinha &&
                 SLOTS_ABASTECIMENTO.map((slot) => {
                   const enviada = anexos.some((a) => a.tipo === slot.tipoFoto)
@@ -736,8 +756,14 @@ export default function TelaDetalheSolicitacao() {
                   longo -> Copiar). Não usa área de transferência via
                   código de propósito -- expo-clipboard é módulo nativo e
                   exigiria recompilar o app só por isso. */}
+              {/* Formatada pra leitura. O banco guarda a forma canônica
+                  (sem pontuação, celular com +55), que é ótima pra pagar
+                  e ruim pra conferir -- e conferir é o que quem paga faz
+                  antes de mandar o dinheiro. O mesmo módulo que aplica a
+                  máscara na digitação reconhece o valor gravado, então as
+                  duas telas mostram a chave igual. */}
               <Text style={styles.chavePix} selectable>
-                {aprovacao.chave_pix}
+                {formatarChaveGravada(aprovacao.chave_pix)}
               </Text>
               <Text style={styles.dicaPix}>Toque e segure para copiar.</Text>
               {podeInformarPix && (
@@ -853,6 +879,8 @@ export default function TelaDetalheSolicitacao() {
           />
         </ScrollView>
       )}
+
+      <BarraTeclado />
 
       <Modal
         visible={fotoAmpliada !== null}
