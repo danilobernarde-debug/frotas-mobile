@@ -192,8 +192,6 @@ export default function TelaDetalheSolicitacao() {
    *  quando ela é passo do formulário aberto -- aí seriam dois campos
    *  pedindo a mesma chave na mesma tela. */
   const editarPixNoQuadro = podeInformarPix && !pixNoFormulario
-  /** As fotos são o passo 5 ou o 6, conforme a chave ocupe um número. */
-  const passoFotos = pixNoFormulario ? 6 : 5
   const litrosNum = paraNumero(litros)
   const totalAbastecimento = paraNumero(valorPago)
   const precoPorLitro = litrosNum > 0 ? totalAbastecimento / litrosNum : 0
@@ -825,19 +823,9 @@ export default function TelaDetalheSolicitacao() {
                   manda: elas são o registro de quem esteve lá, e não há o
                   que a gestão "corrija" numa foto de um posto onde não
                   esteve -- refazer, só voltando à bomba. */}
-              {/* PIX dentro do formulário: é a mesma ida ao posto, e ter
-                  dois quadros separados fazia parecer duas tarefas -- com
-                  dois botões de salvar, e um deles fácil de esquecer. */}
-              {pixNoFormulario && (
-                <>
-                  <Text style={styles.passo}>5. Chave PIX de quem recebe</Text>
-                  <CampoChavePix chave={chave} aoLerQr={lerQrDoPix} lendoQr={enviando === 'PIX'} />
-                </>
-              )}
-
               {ehMinha && (
                 <>
-                  <Text style={styles.passo}>{passoFotos}. Tire as 3 fotos</Text>
+                  <Text style={styles.passo}>5. Tire as 3 fotos</Text>
                   {SLOTS_ABASTECIMENTO.map((slot) => {
                     const anexo = anexos.find((a) => a.tipo === slot.tipoFoto)
                     const subindo = enviando === slot.tipoFoto
@@ -870,6 +858,16 @@ export default function TelaDetalheSolicitacao() {
                       </Pressable>
                     )
                   })}
+                </>
+              )}
+
+              {/* PIX dentro do formulário: é a mesma ida ao posto, e ter
+                  dois quadros separados fazia parecer duas tarefas -- com
+                  dois botões de salvar, e um deles fácil de esquecer. */}
+              {pixNoFormulario && (
+                <>
+                  <Text style={styles.passo}>6. Chave PIX de quem recebe</Text>
+                  <CampoChavePix chave={chave} aoLerQr={lerQrDoPix} lendoQr={enviando === 'PIX'} />
                 </>
               )}
             </View>
