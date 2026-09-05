@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons'
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
@@ -876,19 +877,7 @@ export default function TelaDetalheSolicitacao() {
                   paga confere um contra o outro, e ter os dois em seções
                   separadas obrigava a rolar pra frente e pra trás pra
                   fazer a única conferência que importa aqui. */}
-              {fotosPix.length > 0 && (
-                <View style={styles.linhaFotosPix}>
-                  {fotosPix.map((a) => (
-                    <Pressable key={a.id} onPress={() => setFotoAmpliada(a.id)}>
-                      {fotosDataUri[a.id] ? (
-                        <Image source={{ uri: fotosDataUri[a.id] }} style={styles.fotoPix} />
-                      ) : (
-                        <View style={[styles.fotoPix, styles.fotoPixVazia]} />
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-              )}
+              <AreaFotoPix fotos={fotosPix} fotosDataUri={fotosDataUri} aoAbrir={setFotoAmpliada} />
 
               {editarPixNoQuadro && (
                 <Pressable
@@ -914,6 +903,16 @@ export default function TelaDetalheSolicitacao() {
             <View style={styles.blocoPix}>
               <Text style={styles.rotuloPix}>Chave PIX do recebedor</Text>
               <CampoChavePix chave={chave} aoLerQr={lerQrDoPix} lendoQr={enviando === 'PIX'} />
+              <AreaFotoPix
+                fotos={fotosPix}
+                fotosDataUri={fotosDataUri}
+                aoAbrir={setFotoAmpliada}
+                // Só na edição: o ícone de QR do campo lê o código, este
+                // aqui é pra fotografar a chave que veio escrita num
+                // papel, ou pra pegar da galeria.
+                aoAdicionar={() => perguntarFonte('PIX', 'Chave / QR do PIX')}
+                enviando={enviando === 'PIX'}
+              />
               <View style={styles.acoesPix}>
                 <Pressable onPress={() => setEditandoPix(false)} hitSlop={8} disabled={salvandoPix}>
                   <Text style={styles.linkPixFraco}>Cancelar</Text>
@@ -1117,6 +1116,57 @@ function SecaoAnexos({
  * isso que a rota de anexos passou a aceitar ?token= (mesma solução que
  * a rota de anexo de mensagem já usava).
  */
+/**
+ * Foto da chave/QR ao lado do texto da chave -- é o par que quem paga
+ * compara antes de mandar o dinheiro.
+ *
+ * `aoAdicionar` só vem na edição: ali, sem foto nenhuma, aparece um
+ * quadrado com ícone de câmera no lugar onde a miniatura estaria. Um
+ * espaço vazio não diz que aceita foto; o quadrado diz.
+ */
+function AreaFotoPix({
+  fotos,
+  fotosDataUri,
+  aoAbrir,
+  aoAdicionar,
+  enviando,
+}: {
+  fotos: AnexoAprovacao[]
+  fotosDataUri: Record<number, string>
+  aoAbrir: (id: number) => void
+  aoAdicionar?: () => void
+  enviando?: boolean
+}) {
+  if (fotos.length === 0 && !aoAdicionar) return null
+
+  return (
+    <View style={styles.linhaFotosPix}>
+      {fotos.map((a) => (
+        <Pressable key={a.id} onPress={() => aoAbrir(a.id)}>
+          {fotosDataUri[a.id] ? (
+            <Image source={{ uri: fotosDataUri[a.id] }} style={styles.fotoPix} />
+          ) : (
+            <View style={[styles.fotoPix, styles.fotoPixVazia]} />
+          )}
+        </Pressable>
+      ))}
+      {aoAdicionar && (
+        <Pressable
+          onPress={aoAdicionar}
+          disabled={enviando}
+          style={[styles.fotoPix, styles.fotoPixAdicionar, enviando && styles.botaoDesabilitado]}
+        >
+          {enviando ? (
+            <ActivityIndicator color="#0d9488" size="small" />
+          ) : (
+            <Ionicons name="camera-outline" size={26} color="#0d9488" />
+          )}
+        </Pressable>
+      )}
+    </View>
+  )
+}
+
 function PlayerObservacao({ url }: { url: string }) {
   const player = useAudioPlayer(url)
   const status = useAudioPlayerStatus(player)
@@ -1214,6 +1264,14 @@ const styles = StyleSheet.create({
   linhaFotosPix: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   fotoPix: { width: 84, height: 84, borderRadius: 8, backgroundColor: '#e2e8f0' },
   fotoPixVazia: { borderWidth: 1, borderColor: '#e2e8f0' },
+  fotoPixAdicionar: {
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   painelLimite: {
     backgroundColor: '#fff',
     borderWidth: 1,
