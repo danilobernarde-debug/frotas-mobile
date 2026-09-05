@@ -63,7 +63,7 @@ export function BolhaSolicitacao({
         {a.anexos?.some((x) => x.tipo === 'COMPROVANTE') && (
           <Etiqueta
             icone="✅"
-            texto="Comprovante de pagamento anexado"
+            texto="Comprovante anexado"
             cor={CORES_ETIQUETA.APROVADO}
             style={styles.comprovante}
           />
