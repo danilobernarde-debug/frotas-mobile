@@ -17,9 +17,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { FotoAmpliada } from '../../src/camera/FotoAmpliada'
 import { PreviaMarcaDagua } from '../../src/camera/PreviaMarcaDagua'
 import { SLOTS_ABASTECIMENTO } from '../../src/features/chat/fluxo'
+import { CampoChavePix } from '../../src/features/pix/CampoChavePix'
 import { useFormularioSolicitacao } from '../../src/features/chat/useFormularioSolicitacao'
 import { useVeiculos } from '../../src/features/veiculos/useVeiculos'
-import { NOME_TIPO_CHAVE } from '../../src/lib/chavePix'
 import { moeda } from '../../src/lib/formato'
 import { TIPOS_COMBUSTIVEL, type CategoriaSolicitacao } from '../../src/lib/tipos'
 
@@ -299,63 +299,13 @@ export default function TelaNovaSolicitacao() {
             )}
           </View>
 
-          {/* Um campo só, sem escolher o tipo: a pontuação aparece
-              sozinha quando o formato fica claro. Teclado comum de
-              propósito -- o numérico seria mais confortável pros números,
-              mas trancaria quem vai digitar e-mail ou chave aleatória, e
-              daqui não dá pra saber qual dos dois vem. */}
+          {/* Um campo só, sem escolher o tipo: a pontuação e o tipo saem
+              sozinhos do que foi digitado. Mesmo componente da tela da
+              solicitação já enviada, onde a chave pode ser completada
+              depois -- chave tratada de dois jeitos diferentes é o tipo
+              de divergência que acaba em pagamento errado. */}
           <Text style={styles.rotulo}>Chave PIX</Text>
-          <TextInput
-            style={styles.input}
-            value={formulario.chavePix}
-            onChangeText={formulario.setChavePix}
-            placeholder="CPF, CNPJ, celular, e-mail ou chave aleatória"
-            placeholderTextColor="#94a3b8"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {/* Sem dúvida nenhuma: só confirma o que foi reconhecido, e o
-              motorista confere em vez de declarar o tipo antes. */}
-          {formulario.tipoChavePix &&
-            formulario.chavePixCompleta &&
-            !formulario.avisoChavePix &&
-            !formulario.opcoesChavePix && (
-              <Text style={styles.avisoBom}>
-                ✓ Reconhecido como {NOME_TIPO_CHAVE[formulario.tipoChavePix]}
-              </Text>
-            )}
-          {/* Com dúvida: os 11 dígitos fecham como CPF E têm formato de
-              celular. Nenhuma regra local decide isso (o app do banco
-              resolve consultando o Banco Central, daqui não dá), então
-              quem está com o número na frente é que decide -- em duas abas
-              visíveis, não num link discreto que passa despercebido bem na
-              hora em que a escolha importa. */}
-          {formulario.opcoesChavePix && (
-            <>
-              <Text style={styles.ajudaSecao}>
-                Esses números valem como CPF e como celular. Qual dos dois é?
-              </Text>
-              <View style={styles.listaVeiculos}>
-                {formulario.opcoesChavePix.map((t) => (
-                  <Pressable
-                    key={t}
-                    onPress={() => formulario.escolherTipoChavePix(t)}
-                    style={[styles.chip, formulario.tipoChavePix === t && styles.chipSelecionado]}
-                  >
-                    <Text
-                      style={[styles.chipTexto, formulario.tipoChavePix === t && styles.chipTextoSelecionado]}
-                    >
-                      {NOME_TIPO_CHAVE[t]}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </>
-          )}
-          {/* A frase vem pronta do módulo -- cada motivo (CPF que não
-              fecha, CNPJ que não fecha, números demais) pede uma diferente,
-              e quem sabe qual é o motivo é quem identificou. */}
-          {formulario.avisoChavePix && <Text style={styles.aviso}>{formulario.avisoChavePix}</Text>}
+          <CampoChavePix chave={formulario.chavePix} />
           {/* O motorista precisa saber de onde veio o que está no campo --
               principalmente pra conferir antes de enviar, já que é pra
               onde o dinheiro vai. */}

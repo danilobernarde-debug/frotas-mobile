@@ -3,9 +3,12 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../../../src/auth/useAuth'
-import { capturarFoto, removerFotoLocal } from '../../../src/camera/capturarFoto'
+import { capturarFoto, capturarFotoComQr, removerFotoLocal } from '../../../src/camera/capturarFoto'
 import { escolherImagemChat } from '../../../src/camera/escolherImagemChat'
+import { CampoChavePix } from '../../../src/features/pix/CampoChavePix'
+import { useChavePix } from '../../../src/features/pix/useChavePix'
 import { data as fmtData, moeda } from '../../../src/lib/formato'
+import { lerChavePix } from '../../../src/lib/pixBrCode'
 import { enviarAnexo, urlAnexo } from '../../../src/lib/api'
 import { supabase } from '../../../src/lib/supabase'
 import type { AnexoAprovacao, Aprovacao, TipoAnexo } from '../../../src/lib/tipos'
@@ -69,12 +72,29 @@ export default function TelaDetalheSolicitacao() {
   /** Qual anexo está subindo agora (null = nenhum) -- também serve pra
    *  desabilitar o botão daquela seção sem travar a outra. */
   const [enviando, setEnviando] = useState<TipoAnexo | null>(null)
+  /** Formulário da chave PIX aberto (o motorista tocou em "Informar
+   *  chave PIX"). Fechado por padrão: quem já mandou a chave na criação
+   *  não precisa ver campo nenhum aqui. */
+  const [editandoPix, setEditandoPix] = useState(false)
+  const [salvandoPix, setSalvandoPix] = useState(false)
+  const chave = useChavePix()
 
   const ehMinha = Boolean(perfil?.id && aprovacao?.solicitante_id === perfil.id)
   const ehGestao = perfil?.papel === 'ADMIN' || perfil?.papel === 'GESTOR'
   // O ciclo de pagamento só abre depois do "sim" -- antes disso não há o
   // que pagar nem nota pra cobrar.
   const aprovada = aprovacao?.status === 'APROVADO'
+  const comprovantes = anexos.filter((a) => a.tipo === 'COMPROVANTE')
+  /**
+   * Quem pediu pode completar a chave depois de enviar -- ela costuma
+   * chegar depois da solicitação (o frentista foi buscar o QR, o dono não
+   * estava). Trava depois de pago: com o dinheiro já enviado, trocar a
+   * chave não muda o pagamento e só faria o comprovante não bater com o
+   * que aparece na tela. Mesmo recorte da policy no banco
+   * (0039_motorista_edita_chave_pix.sql) -- a tela não é a garantia, é a
+   * cortesia de não oferecer um caminho que o banco recusaria.
+   */
+  const podeInformarPix = ehMinha && aprovacao?.status_pagamento !== 'PAGO'
 
   /** Câmera própria do app ou galeria, devolvendo só o uri do arquivo
    *  local. Comprovante e nota fiscal são documentos pra LER, então a
@@ -109,7 +129,15 @@ export default function TelaDetalheSolicitacao() {
    */
   async function anexar(tipo: TipoAnexo, fonte: 'camera' | 'galeria') {
     const uri = await escolherArquivo(fonte)
-    if (!uri || !aprovacao) return
+    if (!uri) return
+    await anexarUri(tipo, uri)
+  }
+
+  /** A parte do envio que já tem o arquivo em mãos -- separada porque a
+   *  leitura do QR do PIX chega aqui com a foto já tirada pela câmera,
+   *  sem passar por escolherArquivo(). */
+  async function anexarUri(tipo: TipoAnexo, uri: string) {
+    if (!aprovacao) return
 
     setEnviando(tipo)
     try {
@@ -155,6 +183,56 @@ export default function TelaDetalheSolicitacao() {
     } finally {
       setEnviando(null)
     }
+  }
+
+  /**
+   * Abre a câmera com o leitor de QR ligado: a foto dispara sozinha
+   * quando o código entra no visor, a chave vem junto já lida e a foto
+   * fica anexada como prova (tipo PIX), igual acontece na criação da
+   * solicitação.
+   *
+   * A chave preenche o campo mas NÃO salva sozinha -- o motorista ainda
+   * confere e toca em "Salvar". É pra onde o dinheiro vai; gravar sem
+   * ninguém olhar seria trocar uma conferência por um automatismo.
+   */
+  async function lerQrDoPix() {
+    const captura = await capturarFotoComQr()
+    if (!captura) return
+
+    if (captura.codigoQr) {
+      const resultado = lerChavePix(captura.codigoQr)
+      if (resultado.tipo === 'chave') {
+        chave.definir(resultado.chave)
+      } else if (resultado.tipo === 'dinamico') {
+        Alert.alert('QR de cobrança', 'Esse QR Code não contém a chave. Digite a chave no campo.')
+      }
+    } else {
+      Alert.alert('Não achei QR Code', 'A foto foi anexada. Digite a chave no campo.')
+    }
+
+    // A foto vai junto de qualquer jeito: mesmo sem QR legível ela é o
+    // registro que quem paga confere contra a chave digitada.
+    await anexarUri('PIX', captura.uriLocal)
+  }
+
+  async function salvarChavePix() {
+    if (!aprovacao) return
+    setSalvandoPix(true)
+    // Grava a versão limpa (sem pontuação, celular com +55) -- é como a
+    // chave está registrada no Banco Central; a formatada da tela
+    // quebraria o pagamento do outro lado.
+    const valor = chave.paraGravar() || null
+    const { error } = await supabase
+      .from('frota_aprovacoes')
+      .update({ chave_pix: valor })
+      .eq('id', aprovacao.id)
+    setSalvandoPix(false)
+    if (error) {
+      Alert.alert('Não consegui salvar', error.message)
+      return
+    }
+    setAprovacao((a) => (a ? { ...a, chave_pix: valor } : a))
+    setEditandoPix(false)
   }
 
   /** Alert nativo em vez de um Modal de escolha: esta tela já tem o Modal
@@ -273,6 +351,20 @@ export default function TelaDetalheSolicitacao() {
           </Text>
           <Text style={styles.servico}>{aprovacao.servico}</Text>
 
+          {/* O rótulo "Pago" na linha de status é discreto demais pra uma
+              notícia que o motorista está esperando -- e a seção do
+              comprovante fica lá embaixo, depois de fotos e valores.
+              Este aviso põe o fato onde ele é visto primeiro. */}
+          {comprovantes.length > 0 && (
+            <View style={styles.avisoPago}>
+              <Text style={styles.avisoPagoTitulo}>✅ Pagamento confirmado</Text>
+              <Text style={styles.avisoPagoTexto}>
+                Comprovante anexado em {fmtData(comprovantes[comprovantes.length - 1].criado_em)}. Veja
+                abaixo, em "Comprovante de pagamento".
+              </Text>
+            </View>
+          )}
+
           {perfil?.papel === 'ADMIN' && aprovacao.status === 'PENDENTE' && (
             <View style={styles.decisao}>
               <Pressable
@@ -331,7 +423,7 @@ export default function TelaDetalheSolicitacao() {
             </View>
           )}
 
-          {aprovacao.chave_pix && (
+          {aprovacao.chave_pix && !editandoPix && (
             <View style={styles.blocoPix}>
               <Text style={styles.rotuloPix}>Chave PIX informada pelo motorista</Text>
               {/* selectable: quem paga precisa copiar a chave (toque
@@ -342,6 +434,67 @@ export default function TelaDetalheSolicitacao() {
                 {aprovacao.chave_pix}
               </Text>
               <Text style={styles.dicaPix}>Toque e segure para copiar.</Text>
+              {podeInformarPix && (
+                <Pressable
+                  onPress={() => {
+                    chave.definir(aprovacao.chave_pix ?? '')
+                    setEditandoPix(true)
+                  }}
+                  hitSlop={8}
+                >
+                  <Text style={styles.linkPix}>Corrigir chave</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {/* Sem chave e ainda dá pra informar: a chave costuma chegar
+              DEPOIS da solicitação -- o frentista foi buscar o QR, o dono
+              não estava, o sinal caiu na hora de digitar. Antes disso a
+              única saída era pedir pra gestão digitar por ele. */}
+          {!aprovacao.chave_pix && !editandoPix && podeInformarPix && (
+            <View style={styles.blocoPix}>
+              <Text style={styles.rotuloPix}>Chave PIX</Text>
+              <Text style={styles.dicaPix}>
+                Ainda não informada. Sem ela a gestão não tem para onde pagar.
+              </Text>
+              <Pressable onPress={() => setEditandoPix(true)} hitSlop={8}>
+                <Text style={styles.linkPix}>Informar chave PIX</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {editandoPix && (
+            <View style={styles.blocoPix}>
+              <Text style={styles.rotuloPix}>Chave PIX do recebedor</Text>
+              <Pressable
+                onPress={lerQrDoPix}
+                disabled={enviando === 'PIX'}
+                style={[styles.botaoPix, enviando === 'PIX' && styles.botaoDesabilitado]}
+              >
+                {enviando === 'PIX' ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.botaoPixTexto}>📷 Ler QR Code ou tirar foto</Text>
+                )}
+              </Pressable>
+              <CampoChavePix chave={chave} />
+              <View style={styles.acoesPix}>
+                <Pressable onPress={() => setEditandoPix(false)} hitSlop={8} disabled={salvandoPix}>
+                  <Text style={styles.linkPixFraco}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  onPress={salvarChavePix}
+                  disabled={salvandoPix}
+                  style={[styles.botaoSalvarPix, salvandoPix && styles.botaoDesabilitado]}
+                >
+                  {salvandoPix ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.botaoPixTexto}>Salvar chave</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
           )}
 
@@ -551,6 +704,36 @@ const styles = StyleSheet.create({
   rotuloPix: { fontSize: 12, fontWeight: '700', color: '#0f766e', textTransform: 'uppercase', letterSpacing: 0.4 },
   chavePix: { fontSize: 17, fontWeight: '700', color: '#0f172a', marginTop: 6 },
   dicaPix: { fontSize: 12, color: '#64748b', marginTop: 6 },
+  linkPix: { fontSize: 14, fontWeight: '700', color: '#0d9488', marginTop: 10 },
+  linkPixFraco: { fontSize: 14, fontWeight: '600', color: '#64748b' },
+  botaoPix: {
+    backgroundColor: '#0d9488',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  botaoPixTexto: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  acoesPix: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 16, marginTop: 14 },
+  botaoSalvarPix: {
+    backgroundColor: '#0d9488',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  // Verde forte e largura cheia: é a notícia que o motorista está
+  // esperando, não mais uma linha da ficha.
+  avisoPago: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#6ee7b7',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+  },
+  avisoPagoTitulo: { fontSize: 16, fontWeight: '800', color: '#065f46' },
+  avisoPagoTexto: { fontSize: 13, color: '#047857', marginTop: 4, lineHeight: 18 },
   grade: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   fotoCartao: { width: '47%' },
   foto: { width: '100%', aspectRatio: 1, borderRadius: 10, backgroundColor: '#e2e8f0' },
