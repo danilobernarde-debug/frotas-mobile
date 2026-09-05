@@ -13,9 +13,17 @@ let bancoPromise: Promise<SQLite.SQLiteDatabase> | null = null
 export function obterBanco(): Promise<SQLite.SQLiteDatabase> {
   if (!bancoPromise) {
     bancoPromise = SQLite.openDatabaseAsync(NOME_BANCO).then(async (db) => {
-      await db.execAsync(`
-        pragma journal_mode = WAL;
+      // Sozinho, numa chamada separada do bloco de DDL abaixo, de
+      // propósito: no iOS o execAsync envolve todo o texto recebido numa
+      // transação, e `pragma journal_mode` não pode rodar dentro de uma.
+      // Junto com o resto, ele falhava e o módulo ainda tentava desfazer
+      // uma transação que nunca chegou a existir -- o erro que aparecia
+      // era "SQLiteErrorException: cannot rollback - no transaction is
+      // active" (achado em teste real no iPhone; no Android passava sem
+      // reclamar).
+      await db.execAsync('pragma journal_mode = WAL')
 
+      await db.execAsync(`
         create table if not exists outbox_itens (
           id            text primary key,
           tipo          text not null,
@@ -57,6 +65,14 @@ export function obterBanco(): Promise<SQLite.SQLiteDatabase> {
       await db.runAsync("update outbox_itens set status = 'pendente' where status = 'enviando'")
 
       return db
+    })
+
+    // Falha na abertura não pode ficar grudada no módulo: sem isto, a
+    // promessa REJEITADA continuava em cache e toda chamada seguinte a
+    // obterBanco() -- fila de envio, cache do chat, tudo -- herdava o
+    // mesmo erro pelo resto da sessão, sem chance de tentar de novo.
+    bancoPromise.catch(() => {
+      bancoPromise = null
     })
   }
   return bancoPromise

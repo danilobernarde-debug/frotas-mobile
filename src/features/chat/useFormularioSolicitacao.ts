@@ -1,6 +1,8 @@
+import { scanFromURLAsync } from 'expo-camera'
 import { useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
 import { useCapturaComLocal } from '../../camera/useCapturaComLocal'
+import { lerChavePix } from '../../lib/pixBrCode'
 import type { CategoriaSolicitacao, Veiculo } from '../../lib/tipos'
 import { TIPO_NOVA_SOLICITACAO, type FotoPayload, type NovaSolicitacaoPayload } from '../../outbox/handlers/novaSolicitacao'
 import { enfileirar } from '../../outbox/outbox'
@@ -41,6 +43,12 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   const [precoLitro, setPrecoLitro] = useState('')
   const [tipoCombustivel, setTipoCombustivel] = useState('')
   const [chavePix, setChavePix] = useState('')
+  /** Como a chave atual chegou no campo -- só pra tela poder explicar
+   *  ("lida do QR Code") ou avisar que o QR não trazia chave. Volta a
+   *  'digitada' assim que o motorista edita o campo na mão. */
+  const [origemChavePix, setOrigemChavePix] = useState<'digitada' | 'qr' | 'qr-dinamico' | 'qr-sem-chave'>(
+    'digitada',
+  )
   const [fotos, setFotos] = useState<FotoCapturada[]>([])
   const [enviando, setEnviando] = useState(false)
   const { capturando, capturar } = useCapturaComLocal()
@@ -81,6 +89,50 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     const foto = await capturar(completarLocal, tipoFoto === 'PIX' ? undefined : marcaDagua)
     if (!foto) return
     setFotos((atual) => [...atual.filter((f) => f.tipoFoto !== tipoFoto), { tipoFoto, ...foto }])
+    if (tipoFoto === 'PIX') await preencherChaveDoQr(foto.uriLocal)
+  }
+
+  /**
+   * Tenta ler um QR Code na foto do PIX recém-tirada e preencher a chave
+   * sozinha. Nunca falha o fluxo: se não houver QR, se for QR de outra
+   * coisa, ou se o leitor der erro, a foto continua anexada e o campo
+   * continua como estava -- é conveniência, não etapa obrigatória.
+   *
+   * Só preenche quando o campo está vazio. Se o motorista já digitou algo,
+   * o que ele escreveu vale mais do que o que a máquina leu -- sobrescrever
+   * seria trocar um dado conferido por um adivinhado, e aqui o dado é pra
+   * onde o dinheiro vai.
+   */
+  async function preencherChaveDoQr(uri: string) {
+    let conteudo: string | undefined
+    try {
+      const encontrados = await scanFromURLAsync(uri, ['qr'])
+      conteudo = encontrados[0]?.data
+    } catch {
+      return // leitor não conseguiu abrir a imagem -- segue sem avisar nada
+    }
+    if (!conteudo) return
+
+    const resultado = lerChavePix(conteudo)
+    if (resultado.tipo === 'chave') {
+      // QR dá a chave em dado digital, não em leitura de imagem -- não há
+      // risco de trocar dígito, diferente de tentar ler texto de uma foto.
+      if (!chavePix.trim()) {
+        setChavePix(resultado.chave)
+        setOrigemChavePix('qr')
+      }
+    } else if (resultado.tipo === 'dinamico') {
+      // QR legítimo, mas de cobrança dinâmica: a chave não está nele.
+      setOrigemChavePix('qr-dinamico')
+    } else {
+      setOrigemChavePix('qr-sem-chave')
+    }
+  }
+
+  /** Digitar na mão sempre vence a leitura automática. */
+  function alterarChavePix(valor: string) {
+    setChavePix(valor)
+    setOrigemChavePix('digitada')
   }
 
   /** Remove uma foto de slot fixo já tirada (hoje só a do PIX, que é
@@ -88,6 +140,8 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
    *  sentido "tirar de novo"). */
   function removerFotoSlot(tipoFoto: string) {
     setFotos((atual) => atual.filter((f) => f.tipoFoto !== tipoFoto))
+    // Tirar a foto do PIX apaga também o aviso que veio da leitura dela.
+    if (tipoFoto === 'PIX') setOrigemChavePix('digitada')
   }
 
   /** Lista aberta (manutenção) -- cada toque soma mais uma foto. */
@@ -166,6 +220,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     precoLitro,
     tipoCombustivel,
     chavePix,
+    origemChavePix,
     valorAbastecimento,
     fotos,
     fotosProblema,
@@ -180,7 +235,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     setLitros,
     setPrecoLitro,
     setTipoCombustivel,
-    setChavePix,
+    setChavePix: alterarChavePix,
     tirarFotoSlot,
     removerFotoSlot,
     tirarFotoMultipla,

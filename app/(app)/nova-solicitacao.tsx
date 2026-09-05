@@ -255,7 +255,8 @@ export default function TelaNovaSolicitacao() {
               digitada contra a foto. */}
           <Text style={styles.tituloSecao}>Pagamento (PIX)</Text>
           <Text style={styles.ajudaSecao}>
-            Chave de quem vai receber. Opcional, mas agiliza o pagamento.
+            Chave de quem vai receber. Opcional, mas agiliza o pagamento. Se
+            fotografar um QR Code de PIX, a chave é preenchida sozinha.
           </Text>
 
           <Text style={styles.rotulo}>Chave PIX</Text>
@@ -268,6 +269,20 @@ export default function TelaNovaSolicitacao() {
             autoCapitalize="none"
             autoCorrect={false}
           />
+          {/* O motorista precisa saber de onde veio o que está no campo --
+              principalmente pra conferir antes de enviar, já que é pra
+              onde o dinheiro vai. */}
+          {formulario.origemChavePix === 'qr' && (
+            <Text style={styles.avisoBom}>✓ Chave lida do QR Code. Confira antes de enviar.</Text>
+          )}
+          {formulario.origemChavePix === 'qr-dinamico' && (
+            <Text style={styles.aviso}>
+              Esse QR Code é de cobrança e não contém a chave. Digite a chave acima.
+            </Text>
+          )}
+          {formulario.origemChavePix === 'qr-sem-chave' && (
+            <Text style={styles.aviso}>Não achei um QR Code de PIX na foto. Digite a chave acima.</Text>
+          )}
 
           <Text style={styles.rotulo}>Foto da chave ou do QR Code</Text>
           <View style={styles.listaFotos}>
@@ -299,7 +314,7 @@ export default function TelaNovaSolicitacao() {
               <BotaoFoto
                 onPress={() => formulario.tirarFotoSlot('PIX')}
                 carregando={formulario.capturando}
-                texto="Tirar foto do PIX"
+                texto="Tirar foto do PIX ou QR Code"
               />
             )}
           </View>
@@ -485,6 +500,8 @@ const styles = StyleSheet.create({
     borderTopColor: '#e2e8f0',
   },
   ajudaSecao: { fontSize: 13, color: '#64748b', marginTop: 4 },
+  avisoBom: { fontSize: 13, color: '#0f766e', fontWeight: '600', marginTop: 8 },
+  aviso: { fontSize: 13, color: '#b45309', marginTop: 8 },
   fundoModalFoto: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
   botaoFoto: { alignSelf: 'flex-start', backgroundColor: '#0d9488', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 },
   botaoFotoTexto: { color: '#fff', fontSize: 15, fontWeight: '700' },
