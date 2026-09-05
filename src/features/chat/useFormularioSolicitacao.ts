@@ -174,11 +174,11 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     setOrigemChavePix('digitada')
   }
 
-  /** Aceita a outra leitura possível dos mesmos dígitos, no único caso em
-   *  que a detecção não tem como decidir sozinha (11 dígitos que fecham
-   *  como CPF e como celular ao mesmo tempo). */
-  function trocarTipoChavePix() {
-    if (chaveIdentificada.alternativa) setTipoForcadoChavePix(chaveIdentificada.alternativa)
+  /** Toque numa das abas do caso ambíguo (11 dígitos que fecham como CPF
+   *  e como celular ao mesmo tempo). Só aceita o que a própria detecção
+   *  colocou em `opcoes` -- é ela que sabe quais leituras cabem. */
+  function escolherTipoChavePix(tipo: TipoChavePix) {
+    if (chaveIdentificada.opcoes?.includes(tipo)) setTipoForcadoChavePix(tipo)
   }
 
   /** Remove uma foto de slot fixo já tirada (hoje só a do PIX, que é
@@ -270,7 +270,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     tipoCombustivel,
     chavePix: chaveIdentificada.texto,
     tipoChavePix: chaveIdentificada.tipo,
-    alternativaChavePix: chaveIdentificada.alternativa,
+    opcoesChavePix: chaveIdentificada.opcoes,
     avisoChavePix: chaveIdentificada.aviso,
     chavePixCompleta: chaveIdentificada.completa,
     origemChavePix,
@@ -289,7 +289,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     setPrecoLitro,
     setTipoCombustivel,
     setChavePix: alterarChavePix,
-    trocarTipoChavePix,
+    escolherTipoChavePix,
     tirarFotoSlot,
     removerFotoSlot,
     tirarFotoMultipla,

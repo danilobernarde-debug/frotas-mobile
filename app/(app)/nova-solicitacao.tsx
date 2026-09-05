@@ -314,22 +314,43 @@ export default function TelaNovaSolicitacao() {
             autoCapitalize="none"
             autoCorrect={false}
           />
-          {/* Dizer o que foi reconhecido é o que substitui os botões de
-              tipo: o motorista confere o resultado em vez de declarar a
-              intenção antes. */}
-          {formulario.tipoChavePix && formulario.chavePixCompleta && !formulario.avisoChavePix && (
-            <Text style={styles.avisoBom}>
-              ✓ Reconhecido como {NOME_TIPO_CHAVE[formulario.tipoChavePix]}
-            </Text>
-          )}
-          {/* Único caso que nenhuma regra local decide: 11 dígitos que
-              fecham como CPF e também como celular. */}
-          {formulario.alternativaChavePix && (
-            <Pressable onPress={formulario.trocarTipoChavePix} hitSlop={8}>
-              <Text style={styles.linkTirarNovo}>
-                É um {NOME_TIPO_CHAVE[formulario.alternativaChavePix].toLowerCase()}? Trocar
+          {/* Sem dúvida nenhuma: só confirma o que foi reconhecido, e o
+              motorista confere em vez de declarar o tipo antes. */}
+          {formulario.tipoChavePix &&
+            formulario.chavePixCompleta &&
+            !formulario.avisoChavePix &&
+            !formulario.opcoesChavePix && (
+              <Text style={styles.avisoBom}>
+                ✓ Reconhecido como {NOME_TIPO_CHAVE[formulario.tipoChavePix]}
               </Text>
-            </Pressable>
+            )}
+          {/* Com dúvida: os 11 dígitos fecham como CPF E têm formato de
+              celular. Nenhuma regra local decide isso (o app do banco
+              resolve consultando o Banco Central, daqui não dá), então
+              quem está com o número na frente é que decide -- em duas abas
+              visíveis, não num link discreto que passa despercebido bem na
+              hora em que a escolha importa. */}
+          {formulario.opcoesChavePix && (
+            <>
+              <Text style={styles.ajudaSecao}>
+                Esses números valem como CPF e como celular. Qual dos dois é?
+              </Text>
+              <View style={styles.listaVeiculos}>
+                {formulario.opcoesChavePix.map((t) => (
+                  <Pressable
+                    key={t}
+                    onPress={() => formulario.escolherTipoChavePix(t)}
+                    style={[styles.chip, formulario.tipoChavePix === t && styles.chipSelecionado]}
+                  >
+                    <Text
+                      style={[styles.chipTexto, formulario.tipoChavePix === t && styles.chipTextoSelecionado]}
+                    >
+                      {NOME_TIPO_CHAVE[t]}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
           )}
           {/* A frase vem pronta do módulo -- cada motivo (CPF que não
               fecha, CNPJ que não fecha, números demais) pede uma diferente,

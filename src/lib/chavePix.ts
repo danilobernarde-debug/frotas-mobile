@@ -11,10 +11,11 @@
  *
  * Quando os 11 dígitos passam nas DUAS verificações -- acontece com uns
  * 6% dos CPFs, que por acaso começam com algo parecido com DDD + 9 -- o
- * módulo assume CPF e devolve a outra possibilidade em `alternativa`, pra
- * tela poder oferecer a troca num toque. É o único caso em que nenhuma
- * regra local decide: os aplicativos de banco resolvem consultando o
- * cadastro de chaves do Banco Central, o que daqui não dá pra fazer.
+ * módulo assume CPF e devolve as duas leituras em `opcoes`, pra tela
+ * abrir as abas CPF/Celular e deixar a escolha com quem está com o número
+ * na frente. É o único caso em que nenhuma regra local decide: os
+ * aplicativos de banco resolvem consultando o cadastro de chaves do Banco
+ * Central, o que daqui não dá pra fazer.
  *
  * Duas representações, de propósito:
  *   - a formatada, com pontuação, que aparece no campo;
@@ -57,7 +58,7 @@ function soDigitos(texto: string): string {
  *
  * É o que separa CPF de celular: os 9 primeiros dígitos determinam os 2
  * últimos, então um CPF real sempre fecha a conta e um telefone só fecha
- * por acaso -- daí a `alternativa` devolvida por identificarChavePix().
+ * por acaso -- daí as `opcoes` devolvidas por identificarChavePix().
  *
  * Sequências repetidas (111.111.111-11 e parentes) fecham a aritmética
  * mas não são CPF de ninguém; entram na recusa explícita abaixo.
@@ -125,11 +126,11 @@ export function pareceCelular(digitos: string): boolean {
  * não dá pra afirmar que a Anatel nunca alocou fora dessa faixa, e por
  * isso esta função NÃO decide o tipo de nada.
  *
- * Serve só pra decidir se vale oferecer a troca "é um celular?" num
- * número que já fechou como CPF. Errar aqui custa no máximo um link a
- * menos; errar em pareceCelular() custaria um aviso falso. Medido em
- * simulação de 300 mil CPFs: o link cai de 6,7% pra 2,7% das digitações,
- * sem deixar de aparecer em nenhum celular de formato normal.
+ * Serve só pra decidir se vale abrir as abas CPF/Celular num número que
+ * já fechou como CPF. Errar aqui custa no máximo umas abas a menos;
+ * errar em pareceCelular() custaria um aviso falso. Medido em simulação
+ * de 300 mil CPFs: as abas caem de 6,7% pra 2,7% das digitações, sem
+ * deixar de aparecer em nenhum celular de formato normal.
  */
 export function celularTipico(digitos: string): boolean {
   return pareceCelular(digitos) && '6789'.includes(digitos[3])
@@ -219,9 +220,15 @@ export interface ChavePixIdentificada {
    *  enquanto não é -- reescrever texto que ainda não se entende só
    *  atrapalha quem está digitando. */
   texto: string
-  /** Outra leitura possível dos mesmos dígitos, quando existe (só no caso
-   *  CPF/celular). A tela oferece a troca num toque. */
-  alternativa: TipoChavePix | null
+  /**
+   * As leituras possíveis quando os mesmos dígitos servem para mais de
+   * uma coisa -- hoje só o par CPF/celular. null quando não há dúvida.
+   *
+   * Vem como lista, e não como "a outra opção", porque a tela desenha
+   * abas: a lista tem ordem fixa (CPF, Celular), então as abas não trocam
+   * de lugar quando o motorista escolhe uma. `tipo` diz qual está ativa.
+   */
+  opcoes: readonly TipoChavePix[] | null
   /** Frase a mostrar quando o que foi digitado tem cara de erro, ou null
    *  quando não há o que apontar. O texto mora aqui, e não na tela,
    *  porque cada motivo pede uma frase diferente e quem sabe o motivo é
@@ -241,10 +248,14 @@ export interface ChavePixIdentificada {
 
 const INDEFINIDA: Omit<ChavePixIdentificada, 'texto'> = {
   tipo: null,
-  alternativa: null,
+  opcoes: null,
   aviso: null,
   completa: false,
 }
+
+/** Ordem fixa das abas no caso ambíguo. CPF primeiro por ser a leitura
+ *  assumida -- é a que tem o dígito verificador a favor. */
+const PAR_AMBIGUO = ['CPF', 'CELULAR'] as const
 
 /** E-mail só conta como inteiro com algo antes do @, algo depois e um
  *  ponto no domínio -- "posto@" é digitação em andamento, não chave. */
@@ -256,24 +267,37 @@ function emailCompleto(texto: string): boolean {
  * Descobre sozinha o tipo do que está sendo digitado e devolve já
  * formatado quando tem certeza.
  *
+ * `escolhido` é a aba que o motorista tocou no caso ambíguo. Ela vence a
+ * detecção, mas NÃO apaga `opcoes`: a identificação natural é calculada
+ * primeiro e só então a escolha é aplicada por cima. Se fosse um atalho
+ * no começo da função, escolher "Celular" faria as opções sumirem junto
+ * com a dúvida -- e as abas desapareceriam da tela, sem caminho de volta
+ * pro CPF.
+ *
+ * A escolha também só vale dentro do par que a própria detecção ofereceu.
+ * Assim uma aba tocada num número e um número novo digitado em seguida
+ * não se misturam: a escolha antiga simplesmente deixa de valer.
+ */
+export function identificarChavePix(
+  texto: string,
+  escolhido?: TipoChavePix | null,
+): ChavePixIdentificada {
+  const natural = identificarSozinho(texto)
+  if (!escolhido || !natural.opcoes?.includes(escolhido)) return natural
+  return { ...natural, tipo: escolhido, texto: formatarChavePix(texto, escolhido) }
+}
+
+/**
+ * A detecção em si, sem interferência de escolha nenhuma.
+ *
  * A ordem das perguntas vai do mais decisivo pro menos: "@" só existe em
  * e-mail; letra fora de e-mail só existe em chave aleatória; o resto é
  * dígito, e aí manda o tamanho -- com o desempate do dígito verificador
  * nos 11.
- *
- * `forcado` é a escolha do motorista quando ele usa a troca oferecida em
- * `alternativa`; vence a detecção enquanto ele não editar o campo.
  */
-export function identificarChavePix(
-  texto: string,
-  forcado?: TipoChavePix | null,
-): ChavePixIdentificada {
+function identificarSozinho(texto: string): ChavePixIdentificada {
   const cru = texto.trim()
   if (!cru) return { ...INDEFINIDA, texto: '' }
-
-  if (forcado) {
-    return { ...INDEFINIDA, tipo: forcado, texto: formatarChavePix(texto, forcado), completa: true }
-  }
 
   if (cru.includes('@')) {
     return { ...INDEFINIDA, tipo: 'EMAIL', texto, completa: emailCompleto(cru) }
@@ -313,32 +337,31 @@ export function identificarChavePix(
     const ehCelular = pareceCelular(d)
     if (ehCpf) {
       // Fecha nos dois: assume CPF (o dígito verificador é evidência bem
-      // mais forte que "começa com DDD e 9") e deixa a troca à mão -- mas
-      // só quando o número tem cara de celular DE VERDADE, senão o link
-      // apareceria em 1 a cada 15 CPFs e viraria ruído que se ignora.
+      // mais forte que "começa com DDD e 9") e abre as abas pro motorista
+      // decidir -- mas só quando o número tem cara de celular DE VERDADE,
+      // senão as abas apareceriam em 1 a cada 15 CPFs e virariam ruído
+      // que se ignora. Nenhuma regra local decide esse caso: é aqui que a
+      // pessoa que está olhando o número sabe mais que o app.
       return {
         tipo: 'CPF',
         texto: formatarChavePix(d, 'CPF'),
-        alternativa: celularTipico(d) ? 'CELULAR' : null,
+        opcoes: celularTipico(d) ? PAR_AMBIGUO : null,
         aviso: null,
         completa: true,
       }
     }
     if (ehCelular) {
-      // Sem alternativa aqui: se o dígito verificador não fechou, esses
-      // 11 números não são CPF de ninguém -- oferecer a troca seria
-      // oferecer uma opção que já se sabe errada, em toda digitação de
-      // celular.
+      // Sem abas aqui: se o dígito verificador não fechou, esses 11
+      // números não são CPF de ninguém -- oferecer a opção seria oferecer
+      // uma escolha que já se sabe errada, em toda digitação de celular.
       return { ...INDEFINIDA, tipo: 'CELULAR', texto: formatarChavePix(d, 'CELULAR'), completa: true }
     }
     // Nem uma coisa nem outra -- CPF com dígito trocado, quase sempre.
     // Não bloqueia nada, só marca pra tela avisar.
     return {
-      tipo: null,
+      ...INDEFINIDA,
       texto: d,
-      alternativa: null,
       aviso: 'Confira: esses 11 números não formam um CPF válido nem um celular.',
-         completa: false,
     }
   }
 
@@ -349,11 +372,9 @@ export function identificarChavePix(
   // nada. Mostra o que a pessoa realmente colou e pede conferência.
   if (d.length > DIGITOS_CNPJ) {
     return {
-      tipo: null,
+      ...INDEFINIDA,
       texto: d,
-      alternativa: null,
       aviso: `Confira: ${d.length} números é mais do que qualquer chave PIX tem.`,
-         completa: false,
     }
   }
 
@@ -364,9 +385,9 @@ export function identificarChavePix(
   if (d.length > DIGITOS_CPF) {
     const inteiro = d.length === DIGITOS_CNPJ
     return {
+      ...INDEFINIDA,
       tipo: 'CNPJ',
       texto: formatarChavePix(d, 'CNPJ'),
-      alternativa: null,
       aviso: inteiro && !cnpjValido(d) ? 'Confira: esses 14 números não formam um CNPJ válido.' : null,
       completa: inteiro,
     }
