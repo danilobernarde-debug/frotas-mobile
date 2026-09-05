@@ -77,12 +77,39 @@ export function cpfValido(digitos: string): boolean {
   return true
 }
 
-/** Formato de celular brasileiro: DDD que existe + o 9 que todo número
- *  móvel passou a ter. Fixo (8 dígitos) não pode ser chave PIX. */
+/**
+ * Formato de celular brasileiro: DDD que existe + o 9 que todo número
+ * móvel passou a ter + os oito dígitos restantes. Fixo (8 dígitos) não
+ * pode ser chave PIX.
+ *
+ * Deliberadamente permissiva -- é ela que CLASSIFICA, e classificar
+ * errado tem custo: um celular recusado aqui cairia no aviso de
+ * "confira esses números", alarme falso em cima de um número correto.
+ * O aperto extra fica em `celularTipico`, que não classifica nada.
+ */
 export function pareceCelular(digitos: string): boolean {
   if (digitos.length !== DIGITOS_CELULAR) return false
   if (!DDDS.has(Number(digitos.slice(0, 2)))) return false
   return digitos[2] === '9'
+}
+
+/**
+ * Mesma regra, mais o dígito seguinte ao 9 restrito a 6-9.
+ *
+ * O 9 foi prefixado aos antigos números móveis de 8 dígitos, que já
+ * começavam em 6, 7, 8 ou 9 (2 a 5 eram de telefone fixo) -- então
+ * celular hoje é, na prática, 9 seguido de 6-9. "Na prática" é o ponto:
+ * não dá pra afirmar que a Anatel nunca alocou fora dessa faixa, e por
+ * isso esta função NÃO decide o tipo de nada.
+ *
+ * Serve só pra decidir se vale oferecer a troca "é um celular?" num
+ * número que já fechou como CPF. Errar aqui custa no máximo um link a
+ * menos; errar em pareceCelular() custaria um aviso falso. Medido em
+ * simulação de 300 mil CPFs: o link cai de 6,7% pra 2,7% das digitações,
+ * sem deixar de aparecer em nenhum celular de formato normal.
+ */
+export function celularTipico(digitos: string): boolean {
+  return pareceCelular(digitos) && '6789'.includes(digitos[3])
 }
 
 /**
@@ -232,11 +259,13 @@ export function identificarChavePix(
     const ehCelular = pareceCelular(d)
     if (ehCpf) {
       // Fecha nos dois: assume CPF (o dígito verificador é evidência bem
-      // mais forte que "começa com DDD e 9") e deixa a troca à mão.
+      // mais forte que "começa com DDD e 9") e deixa a troca à mão -- mas
+      // só quando o número tem cara de celular DE VERDADE, senão o link
+      // apareceria em 1 a cada 15 CPFs e viraria ruído que se ignora.
       return {
         tipo: 'CPF',
         texto: formatarChavePix(d, 'CPF'),
-        alternativa: ehCelular ? 'CELULAR' : null,
+        alternativa: celularTipico(d) ? 'CELULAR' : null,
         suspeita: false,
       }
     }
