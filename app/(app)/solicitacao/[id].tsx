@@ -179,7 +179,7 @@ export default function TelaDetalheSolicitacao() {
   const faltaNoAbastecimento = [
     !tipoCombustivel && 'combustível',
     litrosNum <= 0 && 'litros',
-    totalAbastecimento <= 0 && 'valor pago',
+    totalAbastecimento <= 0 && 'valor total',
   ].filter(Boolean) as string[]
 
   /** Câmera própria do app ou galeria, devolvendo só o uri do arquivo
@@ -703,7 +703,7 @@ export default function TelaDetalheSolicitacao() {
                 placeholderTextColor="#94a3b8"
               />
 
-              <Text style={styles.passo}>4. Quanto deu?</Text>
+              <Text style={styles.passo}>4. Valor total</Text>
               <TextInput
                 style={styles.campo}
                 value={valorPago}
