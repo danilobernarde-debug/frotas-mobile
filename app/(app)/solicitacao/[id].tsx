@@ -132,18 +132,23 @@ export default function TelaDetalheSolicitacao() {
    * cortesia de não oferecer um caminho que o banco recusaria.
    */
   const podeInformarPix = ehMinha && aprovacao?.status_pagamento !== 'PAGO'
+  /** Os números já vieram do motorista -- é o que separa "preencher" de
+   *  "corrigir". */
+  const abastecimentoPreenchido = aprovacao?.litros != null && aprovacao.preco_litro != null
   /**
-   * Quem esteve na bomba é o motorista, mas a gestão também lança (chega
-   * nota por e-mail, ou o motorista liga ditando os números) -- pedido do
-   * usuário: "coloca a opção para os dois preencherem". Trava depois de
-   * pago, mesma razão da chave PIX: os números que justificaram o valor
-   * não mudam depois do dinheiro sair.
+   * Quem preenche é o motorista: ele é quem esteve na bomba e viu o
+   * painel. A gestão entra só DEPOIS, e só pra corrigir o que ele mandou
+   * errado -- deixar os dois preencherem do zero convidava a gestão a
+   * digitar por cima de quem tinha o dado na frente.
+   *
+   * Trava depois de pago, mesma razão da chave PIX: os números que
+   * justificaram o valor não mudam depois do dinheiro sair.
    */
   const podeCompletarAbastecimento =
     aprovacao?.categoria === 'ABASTECIMENTO' &&
     aprovada &&
     aprovacao.status_pagamento !== 'PAGO' &&
-    (ehMinha || ehGestao)
+    (ehMinha || (ehGestao && abastecimentoPreenchido))
   const totalAbastecimento = paraNumero(litros) * paraNumero(precoLitro)
 
   /** Câmera própria do app ou galeria, devolvendo só o uri do arquivo
@@ -609,10 +614,13 @@ export default function TelaDetalheSolicitacao() {
 
           {podeCompletarAbastecimento && (
             <View style={styles.painelLimite}>
-              <Text style={styles.painelTitulo}>Depois de abastecer</Text>
+              <Text style={styles.painelTitulo}>
+                {ehMinha ? 'Depois de abastecer' : 'Corrigir dados do abastecimento'}
+              </Text>
               <Text style={styles.dicaPix}>
-                Informe o que a bomba marcou. É o que lança o abastecimento no controle de
-                consumo do veículo.
+                {ehMinha
+                  ? 'Informe o que a bomba marcou. É o que lança o abastecimento no controle de consumo do veículo.'
+                  : 'Ajuste o que o motorista informou errado. O lançamento no controle de consumo acompanha a correção.'}
               </Text>
 
               <Text style={styles.rotuloCampo}>Combustível</Text>
@@ -678,27 +686,32 @@ export default function TelaDetalheSolicitacao() {
                 </Text>
               )}
 
-              <Text style={styles.rotuloCampo}>Fotos do abastecimento</Text>
-              {SLOTS_ABASTECIMENTO.map((slot) => {
-                const enviada = anexos.some((a) => a.tipo === slot.tipoFoto)
-                const subindo = enviando === slot.tipoFoto
-                return (
-                  <Pressable
-                    key={slot.tipoFoto}
-                    onPress={() => perguntarFonte(slot.tipoFoto as TipoAnexo, slot.rotulo)}
-                    disabled={subindo}
-                    style={[styles.botaoPix, (subindo || enviada) && styles.botaoDesabilitado]}
-                  >
-                    {subindo ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <Text style={styles.botaoPixTexto}>
-                        {enviada ? `✓ ${slot.rotulo}` : `📷 ${slot.textoBotao}`}
-                      </Text>
-                    )}
-                  </Pressable>
-                )
-              })}
+              {/* Foto da bomba, do hodômetro e da placa só o motorista
+                  manda: elas são o registro de quem esteve lá, e não há o
+                  que a gestão "corrija" numa foto de um posto onde não
+                  esteve -- refazer, só voltando à bomba. */}
+              {ehMinha && <Text style={styles.rotuloCampo}>Fotos do abastecimento</Text>}
+              {ehMinha &&
+                SLOTS_ABASTECIMENTO.map((slot) => {
+                  const enviada = anexos.some((a) => a.tipo === slot.tipoFoto)
+                  const subindo = enviando === slot.tipoFoto
+                  return (
+                    <Pressable
+                      key={slot.tipoFoto}
+                      onPress={() => perguntarFonte(slot.tipoFoto as TipoAnexo, slot.rotulo)}
+                      disabled={subindo}
+                      style={[styles.botaoPix, (subindo || enviada) && styles.botaoDesabilitado]}
+                    >
+                      {subindo ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.botaoPixTexto}>
+                          {enviada ? `✓ ${slot.rotulo}` : `📷 ${slot.textoBotao}`}
+                        </Text>
+                      )}
+                    </Pressable>
+                  )
+                })}
 
               <Pressable
                 onPress={salvarDadosAbastecimento}
@@ -708,7 +721,9 @@ export default function TelaDetalheSolicitacao() {
                 {salvandoDados ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.botaoPixTexto}>Salvar dados do abastecimento</Text>
+                  <Text style={styles.botaoPixTexto}>
+                    {ehMinha ? 'Salvar dados do abastecimento' : 'Salvar correção'}
+                  </Text>
                 )}
               </Pressable>
             </View>
