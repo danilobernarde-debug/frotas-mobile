@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native'
 import { hora } from '../../lib/formato'
+import { CORES_ETIQUETA, Etiqueta } from './Etiqueta'
 import { StatusBadge } from './StatusBadge'
 import type { EntradaChat, RespondendoA } from './types'
 
@@ -57,9 +58,15 @@ export function BolhaSolicitacao({
         {a.valor > 0 && <Text style={styles.valor}>{moeda(a.valor)}</Text>}
         {/* O motorista fica esperando essa notícia -- sem isto ela só
             aparecia abrindo a solicitação, e não havia como saber que
-            valia a pena abrir. */}
+            valia a pena abrir. Mesma <Etiqueta> do status: as duas no
+            mesmo card com formatos diferentes ficava desalinhado. */}
         {a.anexos?.some((x) => x.tipo === 'COMPROVANTE') && (
-          <Text style={styles.comprovante}>✅ Comprovante de pagamento anexado</Text>
+          <Etiqueta
+            icone="✅"
+            texto="Comprovante de pagamento anexado"
+            cor={CORES_ETIQUETA.APROVADO}
+            style={styles.comprovante}
+          />
         )}
         <View style={styles.rodape}>
           <StatusBadge entrada={entrada} />
@@ -113,7 +120,7 @@ const styles = StyleSheet.create({
   servico: { fontSize: 14, color: '#1e293b', marginTop: 2 },
   valor: { fontSize: 13, color: '#475569', marginTop: 4, fontWeight: '600' },
   fotos: { fontSize: 12, color: '#64748b', marginTop: 4 },
-  comprovante: { fontSize: 12, fontWeight: '700', color: '#047857', marginTop: 6 },
+  comprovante: { marginTop: 8 },
   erroMsg: { fontSize: 12, color: '#be123c', marginTop: 4 },
   rodape: { marginTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   horario: { fontSize: 10, color: '#94a3b8' },
