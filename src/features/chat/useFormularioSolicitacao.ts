@@ -1,3 +1,10 @@
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from 'expo-audio'
 import { scanFromURLAsync } from 'expo-camera'
 import { useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
@@ -13,6 +20,10 @@ import { SLOTS_ABASTECIMENTO } from './fluxo'
 interface FotoCapturada {
   tipoFoto: string
   uriLocal: string
+  /** Só na observação em áudio -- foto sobe como image/jpeg. */
+  nomeArquivo?: string
+  mime?: string
+  duracaoSegundos?: number
   capturadaEm?: string
   latitude?: number
   longitude?: number
@@ -52,6 +63,17 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   const [origemChavePix, setOrigemChavePix] = useState<'digitada' | 'qr' | 'qr-dinamico' | 'qr-sem-chave'>(
     'digitada',
   )
+  /** Observação escrita -- no abastecimento é onde o motorista explica
+   *  quanto precisa, já que o formulário não pede mais número nenhum. */
+  const [observacao, setObservacao] = useState('')
+  /** Observação falada: mais rápida que digitar de dentro do carro, e
+   *  costuma explicar melhor ("tô na reserva, vou pra fazenda e volto
+   *  amanhã") do que um campo de texto que ninguém preenche. Mesmo
+   *  gravador da barra do chat (BarraEntrada), que já resolveu permissão,
+   *  modo de áudio e o mimetype certo do m4a. */
+  const gravador = useAudioRecorder(RecordingPresets.HIGH_QUALITY)
+  const estadoGravador = useAudioRecorderState(gravador, 200)
+  const [erroAudio, setErroAudio] = useState<string | null>(null)
   const [fotos, setFotos] = useState<FotoCapturada[]>([])
   const [enviando, setEnviando] = useState(false)
   const { capturando, capturar } = useCapturaComLocal()
@@ -74,6 +96,49 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
           : f,
       ),
     )
+  }
+
+  async function gravarObservacao() {
+    setErroAudio(null)
+    const permissao = await requestRecordingPermissionsAsync()
+    if (!permissao.granted) {
+      setErroAudio('Sem permissão de microfone -- confira nas configurações do aparelho.')
+      return
+    }
+    try {
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true })
+      await gravador.prepareToRecordAsync()
+      gravador.record()
+    } catch {
+      setErroAudio('Não consegui começar a gravação -- tenta de novo.')
+    }
+  }
+
+  /** O áudio entra na MESMA lista das fotos: o envio da solicitação já
+   *  sobe essa lista inteira como anexo, com repetição e retomada
+   *  resolvidas. Um caminho separado só pro áudio duplicaria isso. */
+  async function pararObservacao() {
+    const segundos = Math.round(estadoGravador.durationMillis / 1000)
+    await gravador.stop()
+    const uri = gravador.uri
+    // Toque sem querer no botão não vira anexo de meio segundo.
+    if (!uri || segundos < 1) return
+    setFotos((atual) => [
+      ...atual.filter((f) => f.tipoFoto !== 'OBSERVACAO'),
+      {
+        tipoFoto: 'OBSERVACAO',
+        uriLocal: uri,
+        nomeArquivo: `observacao-${Date.now()}.m4a`,
+        // audio/mp4, não audio/m4a: o segundo não é mimetype IANA e o
+        // player do iOS recusa carregar com ele (ver BarraEntrada).
+        mime: 'audio/mp4',
+        duracaoSegundos: segundos,
+      },
+    ])
+  }
+
+  function removerObservacaoAudio() {
+    setFotos((atual) => atual.filter((f) => f.tipoFoto !== 'OBSERVACAO'))
   }
 
   /** Uma das 3 fotos fixas do abastecimento -- tirar de novo substitui só
@@ -207,10 +272,13 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
       // registrada no Banco Central. Mandar a versão formatada da tela
       // quebraria o pagamento do outro lado.
       chavePix: chavePix.paraGravar() || null,
+      justificativa: observacao.trim() || null,
       fotos: fotos.map<FotoPayload>((f) => ({
         uriLocal: f.uriLocal,
         tipo: f.tipoFoto,
         status: 'pendente',
+        nomeArquivo: f.nomeArquivo,
+        mime: f.mime,
         capturadaEm: f.capturadaEm,
         latitude: f.latitude,
         longitude: f.longitude,
@@ -227,6 +295,7 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   // aberta da tela.
   const fotosProblema = fotos.filter((f) => f.tipoFoto === 'PROBLEMA')
   const fotoPix = fotos.find((f) => f.tipoFoto === 'PIX') ?? null
+  const audioObservacao = fotos.find((f) => f.tipoFoto === 'OBSERVACAO') ?? null
 
   // ABASTECIMENTO pede só o veículo. Antes exigia litros, preço, KM e as
   // 3 fotos -- dados que só existem DEPOIS de abastecer, o que fazia da
@@ -256,6 +325,15 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     fotos,
     fotosProblema,
     fotoPix,
+    observacao,
+    setObservacao,
+    audioObservacao,
+    gravandoObservacao: estadoGravador.isRecording,
+    segundosGravados: Math.round(estadoGravador.durationMillis / 1000),
+    erroAudio,
+    gravarObservacao,
+    pararObservacao,
+    removerObservacaoAudio,
     capturando,
     enviando,
     podeEnviar,

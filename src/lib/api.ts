@@ -41,6 +41,11 @@ export async function enviarAnexo(params: {
   latitude?: number
   longitude?: number
   localizacaoRotulo?: string
+  /** Só a observação em áudio usa: todo o resto que passa por aqui é
+   *  foto. Sem isto o arquivo subiria anunciado como image/jpeg, e o
+   *  player recusaria carregar bytes que não são imagem. */
+  nomeArquivo?: string
+  mime?: string
 }): Promise<AnexoEnviado> {
   const form = new FormData()
   form.append('alvo', params.alvo)
@@ -57,8 +62,8 @@ export async function enviarAnexo(params: {
   // formato, mas é exatamente o que fetch do React Native espera.
   form.append('arquivo', {
     uri: params.uriArquivo,
-    name: `${Date.now()}.jpg`,
-    type: 'image/jpeg',
+    name: params.nomeArquivo ?? `${Date.now()}.jpg`,
+    type: params.mime ?? 'image/jpeg',
   } as unknown as Blob)
 
   const resposta = await fetch(`${APP_URL}/api/mobile/anexos`, {

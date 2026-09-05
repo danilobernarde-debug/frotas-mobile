@@ -1,3 +1,4 @@
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import {
@@ -61,6 +62,10 @@ const ROTULO_FOTO: Record<string, string> = {
  *  "Fotos", como sempre foi. */
 const TIPOS_PAGAMENTO: TipoAnexo[] = ['PIX', 'COMPROVANTE', 'NOTA FISCAL']
 
+/** Anexos que NÃO são imagem -- ficam fora da galeria, que baixa cada
+ *  item como foto pra exibir. Hoje só o recado em áudio. */
+const TIPOS_NAO_IMAGEM: TipoAnexo[] = ['OBSERVACAO']
+
 /** <Image source={{ uri, headers }}> não manda o header Authorization de
  *  forma confiável (achado em teste real: um fetch() com o mesmo token
  *  pra mesma URL funciona -- 200, image/jpeg -- mas o Image nunca
@@ -116,6 +121,7 @@ export default function TelaDetalheSolicitacao() {
   // que pagar nem nota pra cobrar.
   const aprovada = aprovacao?.status === 'APROVADO'
   const comprovantes = anexos.filter((a) => a.tipo === 'COMPROVANTE')
+  const observacaoAudio = anexos.find((a) => a.tipo === 'OBSERVACAO') ?? null
   /**
    * Quem pediu pode completar a chave depois de enviar -- ela costuma
    * chegar depois da solicitação (o frentista foi buscar o QR, o dono não
@@ -391,6 +397,9 @@ export default function TelaDetalheSolicitacao() {
     if (anexos.length === 0 || !token) return
     let cancelado = false
     for (const a of anexos) {
+      // Áudio não é imagem: baixar como data URI só gastaria rede pra
+      // alimentar um <Image> que nunca vai renderizar.
+      if (TIPOS_NAO_IMAGEM.includes(a.tipo)) continue
       // Já baixado numa passada anterior -- a lista cresce quando um
       // comprovante/nota é anexado aqui mesmo, e sem esta guarda o efeito
       // rebaixaria todas as fotos antigas junto com a nova.
@@ -443,6 +452,22 @@ export default function TelaDetalheSolicitacao() {
               : ''}
           </Text>
           <Text style={styles.servico}>{aprovacao.servico}</Text>
+
+          {/* O recado do motorista fica no topo: é o que explica o
+              pedido, e quem abre esta tela abre pra decidir. */}
+          {(aprovacao.justificativa || observacaoAudio) && (
+            <View style={styles.blocoObservacao}>
+              <Text style={styles.rotuloPix}>Observação do motorista</Text>
+              {aprovacao.justificativa && (
+                <Text style={styles.textoObservacao}>{aprovacao.justificativa}</Text>
+              )}
+              {observacaoAudio && token && (
+                <PlayerObservacao
+                  url={`${urlAnexo('aprovacoes', observacaoAudio.id)}&token=${encodeURIComponent(token)}`}
+                />
+              )}
+            </View>
+          )}
 
           {/* O rótulo "Pago" na linha de status é discreto demais pra uma
               notícia que o motorista está esperando -- e a seção do
@@ -761,7 +786,9 @@ export default function TelaDetalheSolicitacao() {
 
           <SecaoAnexos
             titulo="Fotos"
-            anexos={anexos.filter((a) => !TIPOS_PAGAMENTO.includes(a.tipo))}
+            anexos={anexos.filter(
+              (a) => !TIPOS_PAGAMENTO.includes(a.tipo) && !TIPOS_NAO_IMAGEM.includes(a.tipo),
+            )}
             fotosDataUri={fotosDataUri}
             aoAbrir={setFotoAmpliada}
           />
@@ -912,6 +939,41 @@ function SecaoAnexos({
   )
 }
 
+/**
+ * Toca o recado que o motorista gravou ao pedir.
+ *
+ * A URL leva o token na query, e não no header: useAudioPlayer recebe só
+ * um endereço e não tem como mandar cabeçalho nenhum junto -- foi por
+ * isso que a rota de anexos passou a aceitar ?token= (mesma solução que
+ * a rota de anexo de mensagem já usava).
+ */
+function PlayerObservacao({ url }: { url: string }) {
+  const player = useAudioPlayer(url)
+  const status = useAudioPlayerStatus(player)
+  const tocando = status.playing
+
+  return (
+    <Pressable
+      onPress={() => {
+        if (tocando) {
+          player.pause()
+          return
+        }
+        // Terminado, o player fica parado no fim -- sem voltar ao início
+        // o segundo toque não reproduz nada.
+        if (status.currentTime >= status.duration - 0.1) player.seekTo(0)
+        player.play()
+      }}
+      style={styles.botaoAudio}
+    >
+      <Text style={styles.botaoPixTexto}>
+        {tocando ? '⏸ Pausar recado' : '▶️ Ouvir recado'}
+        {status.duration > 0 ? `  (${Math.round(status.duration)}s)` : ''}
+      </Text>
+    </Pressable>
+  )
+}
+
 const styles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: '#f8fafc' },
   cabecalho: {
@@ -1011,6 +1073,22 @@ const styles = StyleSheet.create({
   avisoAutorizadoTitulo: { fontSize: 16, fontWeight: '800', color: '#92400e' },
   totalCalculado: { fontSize: 15, fontWeight: '700', color: '#0f766e', marginTop: 10 },
   rotuloCampo: { fontSize: 13, fontWeight: '700', color: '#334155', marginTop: 14 },
+  blocoObservacao: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+  },
+  textoObservacao: { fontSize: 14, color: '#1e293b', marginTop: 6, lineHeight: 20 },
+  botaoAudio: {
+    backgroundColor: '#0d9488',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
   avisoLimite: { fontSize: 13, fontWeight: '600', color: '#b45309', marginTop: 8, lineHeight: 18 },
   botaoSalvarLargo: {
     backgroundColor: '#0d9488',

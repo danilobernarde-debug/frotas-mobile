@@ -17,6 +17,10 @@ export interface FotoPayload {
   itemId?: number
   legenda?: string
   status: 'pendente' | 'enviado'
+  /** Presentes só na observação em áudio -- ver enviarAnexo. Ausentes
+   *  em foto, que sobe como image/jpeg. */
+  nomeArquivo?: string
+  mime?: string
   /** Alimentam a marca d'água no servidor (fotos do abastecimento e da
    *  manutenção -- ver TIPOS_COM_MARCA_DAGUA em
    *  frotas-web/src/app/api/mobile/anexos/route.ts). Capturadas no
@@ -49,6 +53,12 @@ export interface NovaSolicitacaoPayload {
    *  hora). Vazia/ausente quando ele não informou. A FOTO da chave/QR
    *  não vem aqui -- é mais uma entrada de `fotos`, com tipo 'PIX'. */
   chavePix?: string | null
+  /** Observação escrita pelo motorista na criação -- no abastecimento é
+   *  onde ele explica quanto precisa e por quê, já que o formulário não
+   *  pede mais número nenhum. Gravada em frota_aprovacoes.justificativa,
+   *  que o painel já exibe. A observação FALADA não vem aqui: é mais uma
+   *  entrada de `fotos`, com tipo 'OBSERVACAO'. */
+  justificativa?: string | null
   fotos: FotoPayload[]
   aprovacaoId?: number
 }
@@ -75,6 +85,7 @@ async function enviar(
         preco_litro: payload.precoLitro,
         tipo_combustivel: payload.tipoCombustivel,
         chave_pix: payload.chavePix || null,
+        justificativa: payload.justificativa || null,
         origem_local_id: ctx.itemId,
       })
       .select('id')
@@ -129,6 +140,8 @@ async function enviar(
         latitude: foto.latitude,
         longitude: foto.longitude,
         localizacaoRotulo: foto.localizacaoRotulo,
+        nomeArquivo: foto.nomeArquivo,
+        mime: foto.mime,
       })
     } catch (e) {
       const mensagem = e instanceof Error ? e.message : String(e)

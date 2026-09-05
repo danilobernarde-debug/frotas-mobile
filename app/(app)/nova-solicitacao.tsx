@@ -19,7 +19,7 @@ import { PreviaMarcaDagua } from '../../src/camera/PreviaMarcaDagua'
 import { CampoChavePix } from '../../src/features/pix/CampoChavePix'
 import { useFormularioSolicitacao } from '../../src/features/chat/useFormularioSolicitacao'
 import { useVeiculos } from '../../src/features/veiculos/useVeiculos'
-import { moeda } from '../../src/lib/formato'
+import { duracaoAudio, moeda } from '../../src/lib/formato'
 import { TIPOS_COMBUSTIVEL, type CategoriaSolicitacao } from '../../src/lib/tipos'
 
 const TITULOS: Partial<Record<CategoriaSolicitacao, string>> = {
@@ -138,6 +138,52 @@ export default function TelaNovaSolicitacao() {
                 esta solicitação e informe os litros, o preço e as fotos.
               </Text>
             </View>
+          ) : null}
+
+          {/* O gestor precisa entender QUANTO liberar, e o formulário não
+              pede mais número nenhum -- é aqui que essa informação entra.
+              Falar é mais rápido que digitar de dentro do carro, e
+              costuma explicar melhor ("tô na reserva, vou pra fazenda e
+              volto amanhã") do que um campo que ninguém preenche. */}
+          {categoria === 'ABASTECIMENTO' ? (
+            <>
+              <Text style={styles.rotulo}>Observação para o gestor (opcional)</Text>
+              <TextInput
+                style={[styles.input, styles.inputMultilinha]}
+                value={formulario.observacao}
+                onChangeText={formulario.setObservacao}
+                placeholder="Ex.: tanque na reserva, vou pra fazenda e volto amanhã"
+                placeholderTextColor="#94a3b8"
+                multiline
+              />
+
+              {formulario.audioObservacao ? (
+                <View style={styles.linhaAudio}>
+                  <Text style={styles.audioOk}>
+                    🎤 Áudio gravado ({duracaoAudio(formulario.audioObservacao.duracaoSegundos)})
+                  </Text>
+                  <Pressable onPress={formulario.removerObservacaoAudio} hitSlop={8}>
+                    <Text style={styles.linkRemover}>Remover</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={
+                    formulario.gravandoObservacao
+                      ? formulario.pararObservacao
+                      : formulario.gravarObservacao
+                  }
+                  style={[styles.botaoAudio, formulario.gravandoObservacao && styles.botaoGravando]}
+                >
+                  <Text style={styles.botaoFotoTexto}>
+                    {formulario.gravandoObservacao
+                      ? `⏹ Parar (${duracaoAudio(formulario.segundosGravados)})`
+                      : '🎤 Gravar recado em áudio'}
+                  </Text>
+                </Pressable>
+              )}
+              {formulario.erroAudio && <Text style={styles.aviso}>{formulario.erroAudio}</Text>}
+            </>
           ) : (
             <>
               <Text style={styles.rotulo}>Descreva o problema</Text>
@@ -414,6 +460,29 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   explicacaoTitulo: { fontSize: 15, fontWeight: '800', color: '#0f766e' },
+  botaoAudio: {
+    backgroundColor: '#0d9488',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  // Vermelho enquanto grava: o botão vira "parar", e a cor é o que avisa
+  // que tem microfone aberto -- ninguém lê o rótulo enquanto fala.
+  botaoGravando: { backgroundColor: '#dc2626' },
+  linhaAudio: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 10,
+  },
+  audioOk: { fontSize: 14, fontWeight: '700', color: '#0f766e' },
   explicacaoTexto: { fontSize: 13, color: '#115e59', marginTop: 4, lineHeight: 19 },
   vazio: { color: '#94a3b8', fontStyle: 'italic' },
   veiculoEscolhido: {

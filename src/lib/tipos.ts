@@ -44,6 +44,9 @@ export type TipoAnexo =
   // COMPROVANTE é o comprovante do pagamento anexado depois pelo
   // gestor/admin, e 'NOTA FISCAL' fecha o ciclo (motorista anexa a nota).
   | 'PIX' | 'COMPROVANTE'
+  // Recado do motorista ao pedir (0042). Único valor que não é imagem:
+  // é o áudio m4a gravado na criação da solicitação.
+  | 'OBSERVACAO'
 
 /** Mesmo enum frota_tipo_combustivel do banco (0001_schema.sql). */
 export const TIPOS_COMBUSTIVEL = ['GASOLINA', 'ALCOOL', 'DIESEL', 'DIESEL S10', 'ARLA 32', 'GNV'] as const
