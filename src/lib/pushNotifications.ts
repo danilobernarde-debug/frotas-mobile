@@ -1,19 +1,60 @@
 import Constants from 'expo-constants'
 import * as Device from 'expo-device'
-import * as Notifications from 'expo-notifications'
+import { isRunningInExpoGo } from 'expo'
 import { Platform } from 'react-native'
 import { supabase } from './supabase'
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-})
+/**
+ * `expo-notifications` NÃO pode ser importado no topo deste arquivo.
+ *
+ * A partir do SDK 55, push remoto no Expo Go deixou de ser um aviso e
+ * virou exceção: só de carregar o módulo, ele roda
+ * PushTokenAutoRegistration.fx -> warnOfExpoGoPushUsage(), que faz
+ * `throw` quando está no Expo Go **no Android** (no iOS só avisa -- ver
+ * node_modules/expo-notifications/build/warnOfExpoGoPushUsage.js). Com o
+ * import estático de antes, isso derrubava o app inteiro na abertura,
+ * antes de qualquer tela renderizar.
+ *
+ * Por isso o require é preguiçoso e guardado por isRunningInExpoGo():
+ * no Expo Go nada de push é carregado (e o app roda normal, só sem
+ * notificação); no build de verdade -- que é onde push funciona --
+ * carrega igual a antes.
+ */
+type ModuloNotificacoes = typeof import('expo-notifications')
+
+let modulo: ModuloNotificacoes | null | undefined
+
+function obterNotificacoes(): ModuloNotificacoes | null {
+  if (modulo !== undefined) return modulo
+  if (isRunningInExpoGo()) {
+    modulo = null
+    return null
+  }
+
+  const carregado = require('expo-notifications') as ModuloNotificacoes
+  // Ficava no topo do arquivo; veio junto pra cá pelo mesmo motivo --
+  // roda uma vez só, na primeira vez que alguém precisa do módulo.
+  carregado.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  })
+  modulo = carregado
+  return carregado
+}
 
 const CANAL_PADRAO = 'padrao'
+
+/** Dados que o servidor manda no payload da notificação (ver
+ *  0035_notificacao_push.sql). */
+export interface DadosNotificacao {
+  tipo?: 'mensagem' | 'solicitacao'
+  encarregadoId?: string
+  aprovacaoId?: number
+}
 
 /**
  * Pede permissão, pega o Expo push token deste aparelho e salva no
@@ -34,6 +75,9 @@ const CANAL_PADRAO = 'padrao'
 export async function registrarPushToken(perfilId: string) {
   if (Platform.OS !== 'android') return
   if (!Device.isDevice) return
+
+  const Notifications = obterNotificacoes()
+  if (!Notifications) return
 
   try {
     await Notifications.setNotificationChannelAsync(CANAL_PADRAO, {
@@ -57,4 +101,29 @@ export async function registrarPushToken(perfilId: string) {
   } catch {
     // sem push -- não impede o resto do app de funcionar
   }
+}
+
+/**
+ * Avisa quando o usuário TOCA numa notificação, pra abrir a tela certa.
+ * Cobre os dois casos: app fechado (cold start, via
+ * getLastNotificationResponseAsync) e app em segundo plano/aberto (via
+ * listener). Devolve a função de limpeza pro useEffect de quem chama.
+ *
+ * Mora aqui, e não em _layout.tsx como antes, pra manter o import de
+ * `expo-notifications` inteiro dentro deste módulo -- ver o comentário
+ * grande no topo. No Expo Go não faz nada.
+ */
+export function assinarRespostaNotificacao(
+  aoTocar: (dados: DadosNotificacao) => void,
+): () => void {
+  const Notifications = obterNotificacoes()
+  if (!Notifications) return () => {}
+
+  Notifications.getLastNotificationResponseAsync().then((resposta) => {
+    if (resposta) aoTocar(resposta.notification.request.content.data as DadosNotificacao)
+  })
+  const assinatura = Notifications.addNotificationResponseReceivedListener((resposta) =>
+    aoTocar(resposta.notification.request.content.data as DadosNotificacao),
+  )
+  return () => assinatura.remove()
 }

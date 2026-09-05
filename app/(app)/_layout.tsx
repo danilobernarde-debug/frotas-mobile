@@ -1,12 +1,13 @@
 import { Redirect, Stack, useRouter } from 'expo-router'
-import * as Notifications from 'expo-notifications'
 import { useEffect } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../src/auth/useAuth'
-import { registrarPushToken } from '../../src/lib/pushNotifications'
+import {
+  assinarRespostaNotificacao,
+  registrarPushToken,
+  type DadosNotificacao,
+} from '../../src/lib/pushNotifications'
 import type { PapelUsuario } from '../../src/lib/tipos'
-
-type DadosNotificacao = { tipo?: 'mensagem' | 'solicitacao'; encarregadoId?: string; aprovacaoId?: number }
 
 export default function LayoutApp() {
   const { sessao, perfil, carregando, sair } = useAuth()
@@ -23,8 +24,7 @@ export default function LayoutApp() {
   // caso. getLastNotificationResponseAsync cobre o app fechado (cold
   // start); o listener cobre em segundo plano/já aberto.
   useEffect(() => {
-    function tratarResposta(resposta: Notifications.NotificationResponse) {
-      const dados = resposta.notification.request.content.data as DadosNotificacao
+    function tratarResposta(dados: DadosNotificacao) {
       if (dados?.tipo === 'mensagem') {
         if (perfil?.papel === 'MOTORISTA') {
           router.push('/(app)/chat')
@@ -36,11 +36,7 @@ export default function LayoutApp() {
       }
     }
 
-    Notifications.getLastNotificationResponseAsync().then((resposta) => {
-      if (resposta) tratarResposta(resposta)
-    })
-    const assinatura = Notifications.addNotificationResponseReceivedListener(tratarResposta)
-    return () => assinatura.remove()
+    return assinarRespostaNotificacao(tratarResposta)
   }, [perfil?.papel, router])
 
   if (carregando) {
