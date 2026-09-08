@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
 import {
@@ -161,16 +162,43 @@ export default function TelaNovaSolicitacao() {
               </Pressable>
 
               <Text style={styles.rotulo}>Observação para o gestor (opcional)</Text>
-              <TextInput
-                style={[styles.input, styles.inputMultilinha]}
-                value={formulario.observacao}
-                onChangeText={formulario.setObservacao}
-                placeholder="Ex.: tanque na reserva, vou pra fazenda e volto amanhã"
-                placeholderTextColor="#94a3b8"
-                multiline
-              />
+              {/* Microfone DENTRO do campo, como o QR na chave PIX: falar é
+                  uma alternativa a escrever, não uma etapa à parte. Mesmo
+                  ícone da barra do chat (Ionicons mic/stop), pra ser o
+                  mesmo gesto que o motorista já conhece de lá. */}
+              <View style={styles.caixaObservacao}>
+                <TextInput
+                  style={styles.campoObservacao}
+                  value={formulario.observacao}
+                  onChangeText={formulario.setObservacao}
+                  placeholder="Ex.: tanque na reserva, vou pra fazenda e volto amanhã"
+                  placeholderTextColor="#94a3b8"
+                  multiline
+                />
+                <Pressable
+                  onPress={
+                    formulario.gravandoObservacao
+                      ? formulario.pararObservacao
+                      : formulario.gravarObservacao
+                  }
+                  hitSlop={10}
+                  style={styles.botaoMic}
+                >
+                  <Ionicons
+                    name={formulario.gravandoObservacao ? 'stop' : 'mic'}
+                    size={24}
+                    color={formulario.gravandoObservacao ? '#dc2626' : '#0d9488'}
+                  />
+                </Pressable>
+              </View>
 
-              {formulario.audioObservacao ? (
+              {formulario.gravandoObservacao && (
+                <Text style={styles.gravando}>
+                  Gravando… {duracaoAudio(formulario.segundosGravados)} — toque no quadrado para parar
+                </Text>
+              )}
+
+              {formulario.audioObservacao && !formulario.gravandoObservacao && (
                 <View style={styles.linhaAudio}>
                   <Text style={styles.audioOk}>
                     🎤 Áudio gravado ({duracaoAudio(formulario.audioObservacao.duracaoSegundos)})
@@ -179,21 +207,6 @@ export default function TelaNovaSolicitacao() {
                     <Text style={styles.linkRemover}>Remover</Text>
                   </Pressable>
                 </View>
-              ) : (
-                <Pressable
-                  onPress={
-                    formulario.gravandoObservacao
-                      ? formulario.pararObservacao
-                      : formulario.gravarObservacao
-                  }
-                  style={[styles.botaoAudio, formulario.gravandoObservacao && styles.botaoGravando]}
-                >
-                  <Text style={styles.botaoFotoTexto}>
-                    {formulario.gravandoObservacao
-                      ? `⏹ Parar (${duracaoAudio(formulario.segundosGravados)})`
-                      : '🎤 Gravar recado em áudio'}
-                  </Text>
-                </Pressable>
               )}
               {formulario.erroAudio && <Text style={styles.aviso}>{formulario.erroAudio}</Text>}
             </>
@@ -468,16 +481,26 @@ const styles = StyleSheet.create({
   valorCalculado: { marginTop: 10, fontSize: 15, fontWeight: '700', color: '#0f766e' },
   listaVeiculos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   linkAdicionar: { fontSize: 14, fontWeight: '700', color: '#0d9488', marginTop: 12 },
-  botaoAudio: {
-    backgroundColor: '#0d9488',
+  caixaObservacao: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 10,
+    paddingHorizontal: 14,
+    marginTop: 8,
   },
-  // Vermelho enquanto grava: o botão vira "parar", e a cor é o que avisa
-  // que tem microfone aberto -- ninguém lê o rótulo enquanto fala.
-  botaoGravando: { backgroundColor: '#dc2626' },
+  campoObservacao: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#0f172a',
+    minHeight: 88,
+    textAlignVertical: 'top',
+  },
+  botaoMic: { paddingLeft: 10, paddingBottom: 14 },
+  gravando: { fontSize: 13, fontWeight: '700', color: '#dc2626', marginTop: 6 },
   linhaAudio: {
     flexDirection: 'row',
     alignItems: 'center',
