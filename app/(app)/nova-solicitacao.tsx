@@ -159,7 +159,7 @@ export default function TelaNovaSolicitacao() {
               ) : (
                 formulario.distanciaTrajeto != null && (
                   <Text style={styles.distancia}>
-                    🛣️ {formulario.distanciaTrajeto.toLocaleString('pt-BR')} km por rodovia
+                    🛣️ {formulario.distanciaTrajeto.toLocaleString('pt-BR')} km
                   </Text>
                 )
               )}

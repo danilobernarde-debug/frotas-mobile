@@ -589,7 +589,7 @@ export default function TelaDetalheSolicitacao() {
                   número é pra quem decide o teto. */}
               {aprovacao.distancia_km != null && (
                 <Text style={styles.distancia}>
-                  {aprovacao.distancia_km.toLocaleString('pt-BR')} km por rodovia
+                  {aprovacao.distancia_km.toLocaleString('pt-BR')} km
                 </Text>
               )}
             </View>
