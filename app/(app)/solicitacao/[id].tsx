@@ -576,6 +576,17 @@ export default function TelaDetalheSolicitacao() {
           </Text>
           <Text style={styles.servico}>{aprovacao.servico}</Text>
 
+          {/* Trajeto junto do recado: os dois existem pela mesma razão --
+              dar contexto pra quem decide o teto. */}
+          {aprovacao.trajeto && aprovacao.trajeto.length > 0 && (
+            <View style={styles.blocoObservacao}>
+              <Text style={styles.rotuloPix}>Trajeto</Text>
+              <Text style={styles.textoObservacao}>
+                {aprovacao.trajeto.map((p) => `${p.cidade}/${p.uf}`).join('  →  ')}
+              </Text>
+            </View>
+          )}
+
           {/* O recado do motorista fica no topo: é o que explica o
               pedido, e quem abre esta tela abre pra decidir. */}
           {(aprovacao.justificativa || observacaoAudio) && (

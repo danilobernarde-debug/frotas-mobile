@@ -72,6 +72,9 @@ export interface Aprovacao {
    *  (aprovado sem limite). Ver 0041_abastecimento_autorizado.sql. */
   autorizado_valor: number | null
   autorizado_litros: number | null
+  /** Paradas na ordem do caminho, da origem ao destino (0045). Nulo
+   *  quando o motorista não informou. */
+  trajeto: { cidade: string; uf: string }[] | null
   status: StatusAprovacao
   status_pagamento: StatusPagamento
   solicitante_id: string | null

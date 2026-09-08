@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { FotoAmpliada } from '../../src/camera/FotoAmpliada'
 import { PreviaMarcaDagua } from '../../src/camera/PreviaMarcaDagua'
 import { CampoChavePix } from '../../src/features/pix/CampoChavePix'
+import { SeletorCidade } from '../../src/features/trajeto/SeletorCidade'
 import { BarraTeclado, ID_BARRA_TECLADO } from '../../src/ui/BarraTeclado'
 import { useFormularioSolicitacao } from '../../src/features/chat/useFormularioSolicitacao'
 import { useVeiculos } from '../../src/features/veiculos/useVeiculos'
@@ -132,21 +133,6 @@ export default function TelaNovaSolicitacao() {
             </View>
           )}
 
-          {categoria === 'ABASTECIMENTO' ? (
-            /* Um pedido de abastecimento não tem o que preencher: quem
-               pede ainda não sabe quanto vai pôr, e KM, litros, preço e
-               as fotos da bomba só existem DEPOIS de abastecer. Pedir
-               isso aqui obrigava o motorista a já ter abastecido pra
-               conseguir pedir autorização. */
-            <View style={styles.explicacao}>
-              <Text style={styles.explicacaoTitulo}>É só pedir</Text>
-              <Text style={styles.explicacaoTexto}>
-                O gestor responde quanto você pode abastecer. Depois de abastecer, abra
-                esta solicitação e informe os litros, o preço e as fotos.
-              </Text>
-            </View>
-          ) : null}
-
           {/* O gestor precisa entender QUANTO liberar, e o formulário não
               pede mais número nenhum -- é aqui que essa informação entra.
               Falar é mais rápido que digitar de dentro do carro, e
@@ -154,6 +140,26 @@ export default function TelaNovaSolicitacao() {
               volto amanhã") do que um campo que ninguém preenche. */}
           {categoria === 'ABASTECIMENTO' ? (
             <>
+              {/* Trajeto antes da observação: é a informação mais objetiva
+                  que o gestor tem pra decidir o teto -- 40 litros pra
+                  rodar na cidade e 40 pra ir até a fazenda e voltar são
+                  decisões diferentes. */}
+              <Text style={styles.rotulo}>Trajeto (opcional)</Text>
+              {formulario.trajeto.map((parada, i) => (
+                <SeletorCidade
+                  key={i}
+                  rotulo={i === 0 ? 'Origem' : i === formulario.trajeto.length - 1 ? 'Destino' : `Parada ${i}`}
+                  valor={parada}
+                  aoEscolher={(m) => formulario.definirParada(i, m)}
+                  // Origem e destino não somem -- trajeto com uma parada
+                  // só não é trajeto. Da terceira em diante, dá pra tirar.
+                  aoRemover={formulario.trajeto.length > 2 ? () => formulario.removerParada(i) : undefined}
+                />
+              ))}
+              <Pressable onPress={formulario.adicionarParada} hitSlop={8}>
+                <Text style={styles.linkAdicionar}>+ Adicionar parada</Text>
+              </Pressable>
+
               <Text style={styles.rotulo}>Observação para o gestor (opcional)</Text>
               <TextInput
                 style={[styles.input, styles.inputMultilinha]}
@@ -461,15 +467,7 @@ const styles = StyleSheet.create({
   inputMultilinha: { height: 90, paddingTop: 12, textAlignVertical: 'top' },
   valorCalculado: { marginTop: 10, fontSize: 15, fontWeight: '700', color: '#0f766e' },
   listaVeiculos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  explicacao: {
-    backgroundColor: '#f0fdfa',
-    borderWidth: 1,
-    borderColor: '#99f6e4',
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 12,
-  },
-  explicacaoTitulo: { fontSize: 15, fontWeight: '800', color: '#0f766e' },
+  linkAdicionar: { fontSize: 14, fontWeight: '700', color: '#0d9488', marginTop: 12 },
   botaoAudio: {
     backgroundColor: '#0d9488',
     borderRadius: 12,
@@ -493,7 +491,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   audioOk: { fontSize: 14, fontWeight: '700', color: '#0f766e' },
-  explicacaoTexto: { fontSize: 13, color: '#115e59', marginTop: 4, lineHeight: 19 },
   vazio: { color: '#94a3b8', fontStyle: 'italic' },
   veiculoEscolhido: {
     flexDirection: 'row',

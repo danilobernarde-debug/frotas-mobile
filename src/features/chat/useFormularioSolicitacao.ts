@@ -9,6 +9,7 @@ import { scanFromURLAsync } from 'expo-camera'
 import { useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
 import { useCapturaComLocal } from '../../camera/useCapturaComLocal'
+import type { Municipio } from '../../lib/municipios'
 import { useChavePix } from '../pix/useChavePix'
 import { lerChavePix } from '../../lib/pixBrCode'
 import type { CategoriaSolicitacao, Veiculo } from '../../lib/tipos'
@@ -66,6 +67,12 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
   /** Observação escrita -- no abastecimento é onde o motorista explica
    *  quanto precisa, já que o formulário não pede mais número nenhum. */
   const [observacao, setObservacao] = useState('')
+  /**
+   * Paradas na ordem do caminho. Nasce com duas vagas (origem e destino)
+   * porque trajeto com uma parada só não é trajeto -- e as duas primeiras
+   * não podem ser removidas, só trocadas.
+   */
+  const [trajeto, setTrajeto] = useState<(Municipio | null)[]>([null, null])
   /** Observação falada: mais rápida que digitar de dentro do carro, e
    *  costuma explicar melhor ("tô na reserva, vou pra fazenda e volto
    *  amanhã") do que um campo de texto que ninguém preenche. Mesmo
@@ -219,6 +226,18 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     }
   }
 
+  function definirParada(indice: number, municipio: Municipio) {
+    setTrajeto((atual) => atual.map((m, i) => (i === indice ? municipio : m)))
+  }
+
+  function adicionarParada() {
+    setTrajeto((atual) => [...atual, null])
+  }
+
+  function removerParada(indice: number) {
+    setTrajeto((atual) => atual.filter((_, i) => i !== indice))
+  }
+
   /** Digitar na mão sempre vence a leitura automática. */
   function alterarChavePix(valor: string) {
     chavePix.alterar(valor)
@@ -273,6 +292,12 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
       // quebraria o pagamento do outro lado.
       chavePix: chavePix.paraGravar() || null,
       justificativa: observacao.trim() || null,
+      // Só as paradas escolhidas: uma vaga aberta que o motorista não
+      // preencheu não é parada, e gravar null no meio do caminho faria a
+      // rota aparecer furada pra quem lê.
+      trajeto: trajeto
+        .filter((m): m is Municipio => m !== null)
+        .map(([cidade, uf]) => ({ cidade, uf })),
       fotos: fotos.map<FotoPayload>((f) => ({
         uriLocal: f.uriLocal,
         tipo: f.tipoFoto,
@@ -327,6 +352,10 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     fotoPix,
     observacao,
     setObservacao,
+    trajeto,
+    definirParada,
+    adicionarParada,
+    removerParada,
     audioObservacao,
     gravandoObservacao: estadoGravador.isRecording,
     segundosGravados: Math.round(estadoGravador.durationMillis / 1000),

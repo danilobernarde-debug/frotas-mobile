@@ -59,6 +59,8 @@ export interface NovaSolicitacaoPayload {
    *  que o painel já exibe. A observação FALADA não vem aqui: é mais uma
    *  entrada de `fotos`, com tipo 'OBSERVACAO'. */
   justificativa?: string | null
+  /** Paradas na ordem do caminho. Ausente quando ele não informou. */
+  trajeto?: { cidade: string; uf: string }[] | null
   fotos: FotoPayload[]
   aprovacaoId?: number
 }
@@ -86,6 +88,7 @@ async function enviar(
         tipo_combustivel: payload.tipoCombustivel,
         chave_pix: payload.chavePix || null,
         justificativa: payload.justificativa || null,
+        trajeto: payload.trajeto?.length ? payload.trajeto : null,
         origem_local_id: ctx.itemId,
       })
       .select('id')
