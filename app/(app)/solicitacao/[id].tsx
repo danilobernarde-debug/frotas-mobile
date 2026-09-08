@@ -584,6 +584,14 @@ export default function TelaDetalheSolicitacao() {
               <Text style={styles.textoObservacao}>
                 {aprovacao.trajeto.map((p) => `${p.cidade}/${p.uf}`).join('  →  ')}
               </Text>
+              {/* Só aparece se o servidor já calculou -- o app não pede
+                  rota a ninguém: o motorista pode estar sem sinal, e o
+                  número é pra quem decide o teto. */}
+              {aprovacao.distancia_km != null && (
+                <Text style={styles.distancia}>
+                  {aprovacao.distancia_km.toLocaleString('pt-BR')} km por rodovia
+                </Text>
+              )}
             </View>
           )}
 
@@ -1455,6 +1463,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   textoObservacao: { fontSize: 14, color: '#1e293b', marginTop: 6, lineHeight: 20 },
+  distancia: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginTop: 6 },
   botaoAudio: {
     backgroundColor: '#0d9488',
     borderRadius: 12,

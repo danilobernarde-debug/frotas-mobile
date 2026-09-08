@@ -75,6 +75,10 @@ export interface Aprovacao {
   /** Paradas na ordem do caminho, da origem ao destino (0045). Nulo
    *  quando o motorista não informou. */
   trajeto: { cidade: string; uf: string }[] | null
+  /** Distância rodoviária do trajeto, calculada pelo SERVIDOR quando o
+   *  gestor abre a solicitação (0046). O app não calcula nada -- só mostra
+   *  se já vier preenchida. */
+  distancia_km: number | null
   status: StatusAprovacao
   status_pagamento: StatusPagamento
   solicitante_id: string | null
