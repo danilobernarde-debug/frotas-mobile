@@ -1,5 +1,16 @@
 import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { MUNICIPIOS, type Municipio } from '../../lib/municipios'
 
 /** Sem acento e em minúsculas -- quem digita "goiania" no teclado do
@@ -28,7 +39,7 @@ function obterIndice() {
   return indice
 }
 
-const MAXIMO_SUGESTOES = 8
+const MAXIMO_RESULTADOS = 60
 
 export function SeletorCidade({
   rotulo,
@@ -42,25 +53,7 @@ export function SeletorCidade({
   /** Só nas paradas que dá pra tirar -- origem e destino não somem. */
   aoRemover?: () => void
 }) {
-  const [busca, setBusca] = useState('')
-  const [trocando, setTrocando] = useState(false)
-
-  const sugestoes = useMemo(() => {
-    const alvo = normalizar(busca)
-    if (alvo.length < 2) return []
-    // Quem começa com o que foi digitado vem antes: "pal" tem que trazer
-    // Palmas no topo, não "Espírito Santo do Pinhal".
-    const comeca: Municipio[] = []
-    const contem: Municipio[] = []
-    for (const item of obterIndice()) {
-      if (item.chave.startsWith(alvo)) comeca.push(item.municipio)
-      else if (contem.length < MAXIMO_SUGESTOES && item.chave.includes(alvo)) contem.push(item.municipio)
-      if (comeca.length >= MAXIMO_SUGESTOES) break
-    }
-    return [...comeca, ...contem].slice(0, MAXIMO_SUGESTOES)
-  }, [busca])
-
-  const mostrarBusca = !valor || trocando
+  const [aberto, setAberto] = useState(false)
 
   return (
     <View style={estilos.bloco}>
@@ -73,56 +66,122 @@ export function SeletorCidade({
         )}
       </View>
 
-      {mostrarBusca ? (
-        <>
+      <Pressable onPress={() => setAberto(true)} style={[estilos.campo, valor && estilos.campoPreenchido]}>
+        <Text style={valor ? estilos.valorTexto : estilos.vazioTexto}>
+          {valor ? `${valor[0]} — ${valor[1]}` : 'Escolher cidade'}
+        </Text>
+      </Pressable>
+
+      {/* Montado só quando aberto: neste projeto dois <Modal> do RN
+          visíveis ao mesmo tempo travam o iOS (a tela da solicitação já
+          tem o modal da foto ampliada), e um formulário com 3 paradas
+          teria 3 destes pendurados. Montando sob demanda, nunca existe
+          mais de um. */}
+      {aberto && (
+        <BuscaCidade
+          titulo={rotulo}
+          aoFechar={() => setAberto(false)}
+          aoEscolher={(m) => {
+            aoEscolher(m)
+            setAberto(false)
+          }}
+        />
+      )}
+    </View>
+  )
+}
+
+/**
+ * Busca em tela cheia: campo no topo, resultados no meio, teclado
+ * embaixo.
+ *
+ * A lista morava embutida no formulário e o teclado cobria justamente as
+ * sugestões -- o motorista digitava às cegas. Em tela própria o campo
+ * fica fixo no alto e a lista ocupa só o espaço acima do teclado
+ * (KeyboardAvoidingView), então o que ele está lendo nunca fica atrás do
+ * que ele está digitando.
+ */
+function BuscaCidade({
+  titulo,
+  aoFechar,
+  aoEscolher,
+}: {
+  titulo: string
+  aoFechar: () => void
+  aoEscolher: (m: Municipio) => void
+}) {
+  const [busca, setBusca] = useState('')
+
+  const resultados = useMemo(() => {
+    const alvo = normalizar(busca)
+    if (alvo.length < 2) return []
+    // Quem começa com o que foi digitado vem antes: "pal" tem que trazer
+    // Palmas no topo, não "Espírito Santo do Pinhal".
+    const comeca: Municipio[] = []
+    const contem: Municipio[] = []
+    for (const item of obterIndice()) {
+      if (item.chave.startsWith(alvo)) comeca.push(item.municipio)
+      else if (contem.length < MAXIMO_RESULTADOS) {
+        if (item.chave.includes(alvo)) contem.push(item.municipio)
+      }
+      if (comeca.length >= MAXIMO_RESULTADOS) break
+    }
+    return [...comeca, ...contem].slice(0, MAXIMO_RESULTADOS)
+  }, [busca])
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={aoFechar}>
+      <SafeAreaView style={estilos.tela} edges={['top', 'bottom']}>
+        <View style={estilos.cabecalho}>
+          <Pressable onPress={aoFechar} hitSlop={10}>
+            <Text style={estilos.cancelar}>Cancelar</Text>
+          </Pressable>
+          <Text style={estilos.tituloTela}>{titulo}</Text>
+          {/* Espaçador da mesma largura do "Cancelar", pra centralizar o
+              título sem medir texto. */}
+          <Text style={[estilos.cancelar, estilos.invisivel]}>Cancelar</Text>
+        </View>
+
+        <KeyboardAvoidingView
+          style={estilos.corpo}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <TextInput
-            style={estilos.campo}
+            style={estilos.campoBusca}
             value={busca}
             onChangeText={setBusca}
             placeholder="Digite o nome da cidade"
             placeholderTextColor="#94a3b8"
             autoCorrect={false}
-            autoFocus={trocando}
+            autoFocus
+            returnKeyType="search"
           />
-          {/* Lista simples, não FlatList: são no máximo 8 itens dentro do
-              ScrollView do formulário, e lista rolável dentro de outra
-              rouba o gesto de rolagem da tela. */}
-          {sugestoes.length > 0 && (
-            <View style={estilos.sugestoes}>
-              {sugestoes.map((m) => (
-                <Pressable
-                  key={`${m[0]}-${m[1]}`}
-                  onPress={() => {
-                    aoEscolher(m)
-                    setBusca('')
-                    setTrocando(false)
-                  }}
-                  style={estilos.sugestao}
-                >
-                  <Text style={estilos.sugestaoNome}>{m[0]}</Text>
-                  <Text style={estilos.sugestaoUf}>{m[1]}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </>
-      ) : (
-        // Escolhida vira uma linha fechada: manter o campo de busca aberto
-        // convidaria a redigitar o que já está certo.
-        <Pressable
-          onPress={() => {
-            setBusca('')
-            setTrocando(true)
-          }}
-          style={estilos.escolhida}
-        >
-          <Text style={estilos.escolhidaTexto}>
-            {valor[0]} — {valor[1]}
-          </Text>
-          <Text style={estilos.trocar}>Trocar</Text>
-        </Pressable>
-      )}
-    </View>
+
+          <FlatList
+            style={estilos.lista}
+            data={resultados}
+            keyExtractor={(m) => `${m[0]}-${m[1]}`}
+            // "handled": tocar num resultado escolhe direto, sem gastar o
+            // primeiro toque só pra fechar o teclado.
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            ListEmptyComponent={
+              <Text style={estilos.vazioLista}>
+                {normalizar(busca).length < 2
+                  ? 'Digite pelo menos 2 letras.'
+                  : 'Nenhuma cidade encontrada.'}
+              </Text>
+            }
+            renderItem={({ item }) => (
+              <Pressable onPress={() => aoEscolher(item)} style={estilos.resultado}>
+                <Text style={estilos.resultadoNome}>{item[0]}</Text>
+                <Text style={estilos.resultadoUf}>{item[1]}</Text>
+              </Pressable>
+            )}
+          />
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </Modal>
   )
 }
 
@@ -137,42 +196,49 @@ const estilos = StyleSheet.create({
     borderColor: '#e2e8f0',
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#0f172a',
+    paddingVertical: 14,
     marginTop: 6,
   },
-  escolhida: {
+  campoPreenchido: { backgroundColor: '#f0fdfa', borderColor: '#99f6e4' },
+  valorTexto: { fontSize: 16, fontWeight: '700', color: '#0f766e' },
+  vazioTexto: { fontSize: 16, color: '#94a3b8' },
+
+  tela: { flex: 1, backgroundColor: '#f8fafc' },
+  cabecalho: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f0fdfa',
-    borderWidth: 1,
-    borderColor: '#99f6e4',
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    marginTop: 6,
-  },
-  escolhidaTexto: { flexShrink: 1, fontSize: 16, fontWeight: '700', color: '#0f766e' },
-  trocar: { fontSize: 13, fontWeight: '600', color: '#0d9488' },
-  sugestoes: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    marginTop: 6,
-    overflow: 'hidden',
     backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
   },
-  sugestao: {
+  cancelar: { fontSize: 15, fontWeight: '600', color: '#0d9488' },
+  invisivel: { opacity: 0 },
+  tituloTela: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  corpo: { flex: 1 },
+  campoBusca: {
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 17,
+    color: '#0f172a',
+  },
+  lista: { flex: 1 },
+  resultado: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#fff',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e2e8f0',
   },
-  sugestaoNome: { flexShrink: 1, fontSize: 15, color: '#0f172a' },
-  sugestaoUf: { fontSize: 13, fontWeight: '700', color: '#64748b' },
+  resultadoNome: { flexShrink: 1, fontSize: 16, color: '#0f172a' },
+  resultadoUf: { fontSize: 13, fontWeight: '700', color: '#64748b' },
+  vazioLista: { padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 14 },
 })
