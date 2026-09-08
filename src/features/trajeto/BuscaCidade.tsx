@@ -41,67 +41,19 @@ function obterIndice() {
 
 const MAXIMO_RESULTADOS = 60
 
-export function SeletorCidade({
-  rotulo,
-  valor,
-  aoEscolher,
-  aoRemover,
-}: {
-  rotulo: string
-  valor: Municipio | null
-  aoEscolher: (m: Municipio) => void
-  /** Só nas paradas que dá pra tirar -- origem e destino não somem. */
-  aoRemover?: () => void
-}) {
-  const [aberto, setAberto] = useState(false)
-
-  return (
-    <View style={estilos.bloco}>
-      <View style={estilos.linhaRotulo}>
-        <Text style={estilos.rotulo}>{rotulo}</Text>
-        {aoRemover && (
-          <Pressable onPress={aoRemover} hitSlop={10}>
-            <Text style={estilos.remover}>Remover</Text>
-          </Pressable>
-        )}
-      </View>
-
-      <Pressable onPress={() => setAberto(true)} style={[estilos.campo, valor && estilos.campoPreenchido]}>
-        <Text style={valor ? estilos.valorTexto : estilos.vazioTexto}>
-          {valor ? `${valor[0]} — ${valor[1]}` : 'Escolher cidade'}
-        </Text>
-      </Pressable>
-
-      {/* Montado só quando aberto: neste projeto dois <Modal> do RN
-          visíveis ao mesmo tempo travam o iOS (a tela da solicitação já
-          tem o modal da foto ampliada), e um formulário com 3 paradas
-          teria 3 destes pendurados. Montando sob demanda, nunca existe
-          mais de um. */}
-      {aberto && (
-        <BuscaCidade
-          titulo={rotulo}
-          aoFechar={() => setAberto(false)}
-          aoEscolher={(m) => {
-            aoEscolher(m)
-            setAberto(false)
-          }}
-        />
-      )}
-    </View>
-  )
-}
-
 /**
- * Busca em tela cheia: campo no topo, resultados no meio, teclado
- * embaixo.
+ * Busca de cidade em tela cheia: campo no topo, resultados no meio,
+ * teclado embaixo.
  *
- * A lista morava embutida no formulário e o teclado cobria justamente as
- * sugestões -- o motorista digitava às cegas. Em tela própria o campo
- * fica fixo no alto e a lista ocupa só o espaço acima do teclado
- * (KeyboardAvoidingView), então o que ele está lendo nunca fica atrás do
- * que ele está digitando.
+ * A lista já morou embutida no formulário, e ali o teclado cobria
+ * justamente as sugestões -- o motorista digitava às cegas. Em tela
+ * própria o campo fica fixo no alto e a lista ocupa só o espaço acima do
+ * teclado, então o que se lê nunca fica atrás do que se digita.
+ *
+ * Quem monta este componente deve fazê-lo só quando for abrir: dois
+ * <Modal> do RN visíveis ao mesmo tempo travam o iOS neste projeto.
  */
-function BuscaCidade({
+export function BuscaCidade({
   titulo,
   aoFechar,
   aoEscolher,
@@ -121,9 +73,7 @@ function BuscaCidade({
     const contem: Municipio[] = []
     for (const item of obterIndice()) {
       if (item.chave.startsWith(alvo)) comeca.push(item.municipio)
-      else if (contem.length < MAXIMO_RESULTADOS) {
-        if (item.chave.includes(alvo)) contem.push(item.municipio)
-      }
+      else if (contem.length < MAXIMO_RESULTADOS && item.chave.includes(alvo)) contem.push(item.municipio)
       if (comeca.length >= MAXIMO_RESULTADOS) break
     }
     return [...comeca, ...contem].slice(0, MAXIMO_RESULTADOS)
@@ -136,16 +86,13 @@ function BuscaCidade({
           <Pressable onPress={aoFechar} hitSlop={10}>
             <Text style={estilos.cancelar}>Cancelar</Text>
           </Pressable>
-          <Text style={estilos.tituloTela}>{titulo}</Text>
-          {/* Espaçador da mesma largura do "Cancelar", pra centralizar o
-              título sem medir texto. */}
+          <Text style={estilos.titulo}>{titulo}</Text>
+          {/* Espaçador do mesmo tamanho do "Cancelar" -- centraliza o
+              título sem precisar medir texto. */}
           <Text style={[estilos.cancelar, estilos.invisivel]}>Cancelar</Text>
         </View>
 
-        <KeyboardAvoidingView
-          style={estilos.corpo}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoidingView style={estilos.corpo} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <TextInput
             style={estilos.campoBusca}
             value={busca}
@@ -166,10 +113,8 @@ function BuscaCidade({
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             ListEmptyComponent={
-              <Text style={estilos.vazioLista}>
-                {normalizar(busca).length < 2
-                  ? 'Digite pelo menos 2 letras.'
-                  : 'Nenhuma cidade encontrada.'}
+              <Text style={estilos.vazio}>
+                {normalizar(busca).length < 2 ? 'Digite pelo menos 2 letras.' : 'Nenhuma cidade encontrada.'}
               </Text>
             }
             renderItem={({ item }) => (
@@ -186,23 +131,6 @@ function BuscaCidade({
 }
 
 const estilos = StyleSheet.create({
-  bloco: { marginTop: 12 },
-  linhaRotulo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  rotulo: { fontSize: 13, fontWeight: '700', color: '#334155' },
-  remover: { fontSize: 13, fontWeight: '600', color: '#be123c' },
-  campo: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    marginTop: 6,
-  },
-  campoPreenchido: { backgroundColor: '#f0fdfa', borderColor: '#99f6e4' },
-  valorTexto: { fontSize: 16, fontWeight: '700', color: '#0f766e' },
-  vazioTexto: { fontSize: 16, color: '#94a3b8' },
-
   tela: { flex: 1, backgroundColor: '#f8fafc' },
   cabecalho: {
     flexDirection: 'row',
@@ -216,7 +144,7 @@ const estilos = StyleSheet.create({
   },
   cancelar: { fontSize: 15, fontWeight: '600', color: '#0d9488' },
   invisivel: { opacity: 0 },
-  tituloTela: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  titulo: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
   corpo: { flex: 1 },
   campoBusca: {
     backgroundColor: '#fff',
@@ -240,5 +168,5 @@ const estilos = StyleSheet.create({
   },
   resultadoNome: { flexShrink: 1, fontSize: 16, color: '#0f172a' },
   resultadoUf: { fontSize: 13, fontWeight: '700', color: '#64748b' },
-  vazioLista: { padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 14 },
+  vazio: { padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 14 },
 })

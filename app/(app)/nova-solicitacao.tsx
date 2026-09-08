@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { FotoAmpliada } from '../../src/camera/FotoAmpliada'
 import { PreviaMarcaDagua } from '../../src/camera/PreviaMarcaDagua'
 import { CampoChavePix } from '../../src/features/pix/CampoChavePix'
-import { SeletorCidade } from '../../src/features/trajeto/SeletorCidade'
+import { ListaTrajeto } from '../../src/features/trajeto/ListaTrajeto'
 import { BarraTeclado, ID_BARRA_TECLADO } from '../../src/ui/BarraTeclado'
 import { useFormularioSolicitacao } from '../../src/features/chat/useFormularioSolicitacao'
 import { useVeiculos } from '../../src/features/veiculos/useVeiculos'
@@ -146,20 +146,12 @@ export default function TelaNovaSolicitacao() {
                   rodar na cidade e 40 pra ir até a fazenda e voltar são
                   decisões diferentes. */}
               <Text style={styles.rotulo}>Trajeto (opcional)</Text>
-              {formulario.trajeto.map((parada, i) => (
-                <SeletorCidade
-                  key={i}
-                  rotulo={i === 0 ? 'Origem' : i === formulario.trajeto.length - 1 ? 'Destino' : `Parada ${i}`}
-                  valor={parada}
-                  aoEscolher={(m) => formulario.definirParada(i, m)}
-                  // Origem e destino não somem -- trajeto com uma parada
-                  // só não é trajeto. Da terceira em diante, dá pra tirar.
-                  aoRemover={formulario.trajeto.length > 2 ? () => formulario.removerParada(i) : undefined}
-                />
-              ))}
-              <Pressable onPress={formulario.adicionarParada} hitSlop={8}>
-                <Text style={styles.linkAdicionar}>+ Adicionar parada</Text>
-              </Pressable>
+              <ListaTrajeto
+                paradas={formulario.trajeto}
+                aoDefinir={formulario.definirParada}
+                aoAdicionar={formulario.adicionarParada}
+                aoRemover={formulario.removerParada}
+              />
 
               <Text style={styles.rotulo}>Observação para o gestor (opcional)</Text>
               {/* Microfone DENTRO do campo, como o QR na chave PIX: falar é
@@ -480,7 +472,6 @@ const styles = StyleSheet.create({
   inputMultilinha: { height: 90, paddingTop: 12, textAlignVertical: 'top' },
   valorCalculado: { marginTop: 10, fontSize: 15, fontWeight: '700', color: '#0f766e' },
   listaVeiculos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  linkAdicionar: { fontSize: 14, fontWeight: '700', color: '#0d9488', marginTop: 12 },
   caixaObservacao: {
     flexDirection: 'row',
     alignItems: 'flex-end',
