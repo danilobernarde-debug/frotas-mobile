@@ -152,6 +152,17 @@ export default function TelaNovaSolicitacao() {
                 aoAdicionar={formulario.adicionarParada}
                 aoRemover={formulario.removerParada}
               />
+              {/* Some quando não dá pra calcular (sem internet): melhor
+                  nada do que um número que pode estar velho. */}
+              {formulario.calculandoDistancia ? (
+                <Text style={styles.distanciaCalculando}>Calculando distância…</Text>
+              ) : (
+                formulario.distanciaTrajeto != null && (
+                  <Text style={styles.distancia}>
+                    🛣️ {formulario.distanciaTrajeto.toLocaleString('pt-BR')} km por rodovia
+                  </Text>
+                )
+              )}
 
               <Text style={styles.rotulo}>Observação para o gestor (opcional)</Text>
               {/* Microfone DENTRO do campo, como o QR na chave PIX: falar é
@@ -492,6 +503,8 @@ const styles = StyleSheet.create({
   },
   botaoMic: { paddingLeft: 10, paddingBottom: 14 },
   gravando: { fontSize: 13, fontWeight: '700', color: '#dc2626', marginTop: 6 },
+  distancia: { fontSize: 15, fontWeight: '700', color: '#0f766e', marginTop: 10, marginLeft: 28 },
+  distanciaCalculando: { fontSize: 13, color: '#94a3b8', marginTop: 10, marginLeft: 28 },
   linhaAudio: {
     flexDirection: 'row',
     alignItems: 'center',

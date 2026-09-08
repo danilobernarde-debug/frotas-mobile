@@ -137,3 +137,32 @@ export async function removerAnexo(params: {
     throw new Error(corpo?.erro ?? `Falha ao remover o anexo (status ${resposta.status}).`)
   }
 }
+
+/**
+ * Distância rodoviária de um trajeto. O cálculo é do servidor -- o app
+ * não fala com serviço de rotas nem carrega malha viária.
+ *
+ * Devolve null sem reclamar quando não há internet: a distância é
+ * conveniência pro motorista conferir o caminho, e o pedido tem que
+ * poder sair mesmo sem ela.
+ */
+export async function consultarDistancia(params: {
+  trajeto: { cidade: string; uf: string }[]
+  tokenAcesso: string
+}): Promise<number | null> {
+  try {
+    const resposta = await fetch(`${APP_URL}/api/mobile/distancia`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${params.tokenAcesso}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ trajeto: params.trajeto }),
+    })
+    if (!resposta.ok) return null
+    const corpo = (await resposta.json()) as { km?: number | null }
+    return corpo.km ?? null
+  } catch {
+    return null
+  }
+}

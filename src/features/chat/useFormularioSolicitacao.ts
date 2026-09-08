@@ -6,8 +6,10 @@ import {
   useAudioRecorderState,
 } from 'expo-audio'
 import { scanFromURLAsync } from 'expo-camera'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
+import { consultarDistancia } from '../../lib/api'
+import { supabase } from '../../lib/supabase'
 import { useCapturaComLocal } from '../../camera/useCapturaComLocal'
 import type { Municipio } from '../../lib/municipios'
 import { useChavePix } from '../pix/useChavePix'
@@ -73,6 +75,10 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
    * não podem ser removidas, só trocadas.
    */
   const [trajeto, setTrajeto] = useState<(Municipio | null)[]>([null, null])
+  /** Distância do trajeto montado até agora. null = ainda não deu pra
+   *  calcular (menos de duas paradas, ou sem internet). */
+  const [distanciaTrajeto, setDistanciaTrajeto] = useState<number | null>(null)
+  const [calculandoDistancia, setCalculandoDistancia] = useState(false)
   /** Observação falada: mais rápida que digitar de dentro do carro, e
    *  costuma explicar melhor ("tô na reserva, vou pra fazenda e volto
    *  amanhã") do que um campo de texto que ninguém preenche. Mesmo
@@ -226,6 +232,41 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     }
   }
 
+  // Recalcula quando as paradas mudam. Quem calcula é o servidor -- o app
+  // não carrega malha viária -- e sem internet a consulta devolve null e a
+  // tela só não mostra número: o pedido tem que poder sair assim mesmo.
+  const paradasEscolhidas = trajeto.filter((m): m is Municipio => m !== null)
+  const assinaturaTrajeto = paradasEscolhidas.map((m) => `${m[0]}|${m[1]}`).join('>')
+
+  useEffect(() => {
+    if (paradasEscolhidas.length < 2) {
+      setDistanciaTrajeto(null)
+      return
+    }
+    let cancelado = false
+    setCalculandoDistancia(true)
+    ;(async () => {
+      const { data: sessao } = await supabase.auth.getSession()
+      const token = sessao.session?.access_token
+      const km = token
+        ? await consultarDistancia({
+            trajeto: paradasEscolhidas.map(([cidade, uf]) => ({ cidade, uf })),
+            tokenAcesso: token,
+          })
+        : null
+      if (!cancelado) {
+        setDistanciaTrajeto(km)
+        setCalculandoDistancia(false)
+      }
+    })()
+    return () => {
+      cancelado = true
+    }
+    // Depende da ASSINATURA, não do array: trocar uma parada por ela mesma
+    // (ou re-renderizar) não pode disparar consulta nova.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assinaturaTrajeto])
+
   function definirParada(indice: number, municipio: Municipio) {
     setTrajeto((atual) => atual.map((m, i) => (i === indice ? municipio : m)))
   }
@@ -353,6 +394,8 @@ export function useFormularioSolicitacao(categoria: CategoriaSolicitacao) {
     observacao,
     setObservacao,
     trajeto,
+    distanciaTrajeto,
+    calculandoDistancia,
     definirParada,
     adicionarParada,
     removerParada,
