@@ -10,7 +10,6 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { MUNICIPIOS, type Municipio } from '../../lib/municipios'
 
 /** Sem acento e em minúsculas -- quem digita "goiania" no teclado do
@@ -81,7 +80,7 @@ export function BuscaCidade({
 
   return (
     <Modal visible animationType="slide" onRequestClose={aoFechar}>
-      <SafeAreaView style={estilos.tela} edges={['top', 'bottom']}>
+      <View style={estilos.tela}>
         <View style={estilos.cabecalho}>
           <Pressable onPress={aoFechar} hitSlop={10}>
             <Text style={estilos.cancelar}>Cancelar</Text>
@@ -125,7 +124,7 @@ export function BuscaCidade({
             )}
           />
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </View>
     </Modal>
   )
 }
@@ -137,7 +136,15 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 12,
+    // Recuo FIXO, não SafeAreaView: dentro de um <Modal> o
+    // react-native-safe-area-context às vezes não calcula o inset (é
+    // janela nativa separada) e o cabeçalho sobe por baixo da barra de
+    // status -- o "Cancelar" fica ilegível e sem jeito de tocar. Foi
+    // exatamente o que aconteceu aqui, e é a mesma armadilha que
+    // CameraCustomizada.tsx já documenta desde o botão "Fechar" dela.
+    // Valor generoso cobre notch e Dynamic Island sem depender do cálculo.
+    paddingTop: Platform.OS === 'ios' ? 56 : 32,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
@@ -155,7 +162,9 @@ const estilos = StyleSheet.create({
     fontSize: 17,
     color: '#0f172a',
   },
-  lista: { flex: 1 },
+  // Mesma razão do paddingTop: o indicador de início do iPhone comeria a
+  // última linha da lista.
+  lista: { flex: 1, paddingBottom: Platform.OS === 'ios' ? 24 : 8 },
   resultado: {
     flexDirection: 'row',
     alignItems: 'center',
