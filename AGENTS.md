@@ -26,9 +26,10 @@ O app usa o Supabase Local (servidor `192.168.100.6`, API em
 Sistema RH e o módulo Documentos**. O banco e as migrations ficam no
 `frotas-web`. Antes de mudar algo no Supabase (tabela, política, Storage,
 Realtime, endereço ou chave), leia `D:\Sistemas Claude\.Conexões\Supabase Local\`
-(LEIA-ME, INVENTARIO, as últimas entradas do HISTORICO e as PENDENCIAS). Depois
-de mudar, registre no `HISTORICO.md` e atualize o `INVENTARIO.md`. Nunca copie
-chaves ou senhas para esses arquivos.
+(LEIA-ME, INVENTARIO, as últimas entradas do HISTORICO e as PENDENCIAS). Rode o
+`conferir-supabase.sh` dessa pasta antes e depois de mexer: ele mostra o que mudou no
+servidor. Depois de mudar, registre no `HISTORICO.md` e atualize o `INVENTARIO.md`.
+Nunca copie chaves ou senhas para esses arquivos.
 
 Endereço e chave do app vêm do ambiente `preview` da EAS
 (`EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY`), que **vence** o
