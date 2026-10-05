@@ -1,33 +1,49 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import type { ItemChecklistModelo } from '../../lib/tipos'
+import type { ItemChecklistModelo, TipoChecklist } from '../../lib/tipos'
 
-const CHAVE_CACHE = 'cache:itens_checklist'
+// Chave nova: a antiga (cache:itens_checklist) guardava só os itens, sem
+// tipo nem seção -- lida por esta versão, mostraria tudo sem filtro.
+const CHAVE_CACHE = 'cache:modelo_checklist_v2'
 
-/** Os 20 itens do checklist, lidos do banco (nunca hardcoded -- o web
- *  também lê assim) e cacheados pro formulário abrir mesmo sem sinal. */
+interface ModeloChecklist {
+  tipos: TipoChecklist[]
+  itens: ItemChecklistModelo[]
+}
+
+/** Tipos de checklist (Veículo, Máquina, ...) e os itens de todos eles,
+ *  lidos do banco (nunca hardcoded -- o web também lê assim) e cacheados
+ *  pro formulário abrir mesmo sem sinal. A tela filtra pelo tipo escolhido. */
 export function useItensChecklist() {
-  const [itens, setItens] = useState<ItemChecklistModelo[]>([])
+  const [modelo, setModelo] = useState<ModeloChecklist>({ tipos: [], itens: [] })
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
     let cancelado = false
     async function carregar() {
-      const { data, error } = await supabase
-        .from('frota_checklist_itens_modelo')
-        .select('*')
-        .eq('ativo', true)
-        .order('ordem')
+      const [tipos, itens] = await Promise.all([
+        supabase.from('frota_checklist_tipos').select('*').eq('ativo', true).order('ordem'),
+        supabase
+          .from('frota_checklist_itens_modelo')
+          .select('*')
+          .eq('ativo', true)
+          .order('tipo')
+          .order('ordem'),
+      ])
 
       if (cancelado) return
 
-      if (!error && data) {
-        setItens(data as ItemChecklistModelo[])
-        AsyncStorage.setItem(CHAVE_CACHE, JSON.stringify(data)).catch(() => {})
+      if (!tipos.error && !itens.error && tipos.data && itens.data) {
+        const novo = {
+          tipos: tipos.data as TipoChecklist[],
+          itens: itens.data as ItemChecklistModelo[],
+        }
+        setModelo(novo)
+        AsyncStorage.setItem(CHAVE_CACHE, JSON.stringify(novo)).catch(() => {})
       } else {
         const emCache = await AsyncStorage.getItem(CHAVE_CACHE)
-        if (emCache && !cancelado) setItens(JSON.parse(emCache) as ItemChecklistModelo[])
+        if (emCache && !cancelado) setModelo(JSON.parse(emCache) as ModeloChecklist)
       }
       if (!cancelado) setCarregando(false)
     }
@@ -37,5 +53,5 @@ export function useItensChecklist() {
     }
   }, [])
 
-  return { itens, carregando }
+  return { tipos: modelo.tipos, itens: modelo.itens, carregando }
 }

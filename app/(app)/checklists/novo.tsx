@@ -13,11 +13,12 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../../../src/auth/useAuth'
+import { removerFotoLocal } from '../../../src/camera/capturarFoto'
 import { useCapturaComLocal, type FotoComLocal } from '../../../src/camera/useCapturaComLocal'
 import { FotoAmpliada } from '../../../src/camera/FotoAmpliada'
 import { useItensChecklist } from '../../../src/features/checklists/useItensChecklist'
 import { useVeiculos } from '../../../src/features/veiculos/useVeiculos'
-import type { Veiculo } from '../../../src/lib/tipos'
+import type { TipoChecklist, Veiculo } from '../../../src/lib/tipos'
 import { TIPO_CHECKLIST, type ChecklistPayload, type RespostaPayload } from '../../../src/outbox/handlers/checklist'
 import type { FotoPayload } from '../../../src/outbox/handlers/novaSolicitacao'
 import { enfileirar } from '../../../src/outbox/outbox'
@@ -29,7 +30,7 @@ export default function TelaNovoChecklist() {
   const router = useRouter()
   const { perfil } = useAuth()
   const { veiculos } = useVeiculos()
-  const { itens, carregando: carregandoItens } = useItensChecklist()
+  const { tipos, itens, carregando: carregandoItens } = useItensChecklist()
   const { capturar } = useCapturaComLocal()
 
   const [veiculo, setVeiculo] = useState<Veiculo | null>(null)
@@ -39,12 +40,17 @@ export default function TelaNovoChecklist() {
   // linha assim que escolhe; "Trocar" reabre a busca (mesmo padrão de
   // app/(app)/nova-solicitacao.tsx).
   const [trocandoVeiculo, setTrocandoVeiculo] = useState(false)
+  // Cada tipo (Veículo, Máquina, ...) tem a própria lista de itens; nada
+  // aparece até escolher. Trocar de tipo não apaga as respostas dadas --
+  // só as do tipo escolhido são enviadas.
+  const [tipo, setTipo] = useState<TipoChecklist | null>(null)
   const [odometro, setOdometro] = useState('')
+  const [horimetro, setHorimetro] = useState('')
   const [respostas, setRespostas] = useState<Record<number, { valor: Valor; observacao: string }>>({})
   const [enviando, setEnviando] = useState(false)
 
-  // Foto opcional por item -- uma por item, disponível em qualquer um dos
-  // 20 (não só nos marcados "Não"). Ainda não enviada.
+  // Foto opcional por item -- uma por item, disponível em qualquer item
+  // (não só nos marcados "Não"). Ainda não enviada.
   const [fotosPorItem, setFotosPorItem] = useState<Record<number, FotoComLocal>>({})
   const [capturandoItemId, setCapturandoItemId] = useState<number | null>(null)
   // uri local da foto aberta em tela cheia, ou null se o modal tá fechado.
@@ -94,12 +100,18 @@ export default function TelaNovoChecklist() {
     ? veiculos.filter((v) => v.placa.toLowerCase().includes(filtro) || v.modelo.toLowerCase().includes(filtro))
     : veiculos
 
-  const respondidos = useMemo(
-    () => itens.filter((i) => respostas[i.id]?.valor).length,
-    [itens, respostas],
+  const itensDoTipo = useMemo(
+    () => (tipo ? itens.filter((i) => i.tipo === tipo.codigo) : []),
+    [itens, tipo],
   )
-  const todosRespondidos = itens.length > 0 && respondidos === itens.length
-  const podeEnviar = veiculo && odometro.trim() && todosRespondidos && !enviando
+  const respondidos = useMemo(
+    () => itensDoTipo.filter((i) => respostas[i.id]?.valor).length,
+    [itensDoTipo, respostas],
+  )
+  const todosRespondidos = itensDoTipo.length > 0 && respondidos === itensDoTipo.length
+  // Máquina trabalha por hora: pede o horímetro, e o KM fica opcional.
+  const medidaPreenchida = tipo?.pede_horimetro ? horimetro.trim() : odometro.trim()
+  const podeEnviar = veiculo && tipo && medidaPreenchida && todosRespondidos && !enviando
 
   function definirValor(itemId: number, valor: Valor) {
     setRespostas((atual) => ({
@@ -113,10 +125,10 @@ export default function TelaNovoChecklist() {
   }
 
   async function enviar() {
-    if (!veiculo) return
+    if (!veiculo || !tipo) return
     setEnviando(true)
 
-    const listaRespostas: RespostaPayload[] = itens.map((item) => {
+    const listaRespostas: RespostaPayload[] = itensDoTipo.map((item) => {
       const r = respostas[item.id]
       return {
         itemId: item.id,
@@ -125,7 +137,15 @@ export default function TelaNovoChecklist() {
       }
     })
 
-    const fotos: FotoPayload[] = Object.entries(fotosPorItem).map(([itemId, foto]) => ({
+    // Foto tirada num item de outro tipo (antes de trocar o tipo) não vai.
+    const idsDoTipo = new Set(itensDoTipo.map((i) => i.id))
+    const fotosDoTipo = Object.entries(fotosPorItem).filter(([itemId, foto]) => {
+      if (idsDoTipo.has(Number(itemId))) return true
+      removerFotoLocal(foto.uriLocal)
+      return false
+    })
+
+    const fotos: FotoPayload[] = fotosDoTipo.map(([itemId, foto]) => ({
       uriLocal: foto.uriLocal,
       itemId: Number(itemId),
       status: 'pendente',
@@ -136,9 +156,11 @@ export default function TelaNovoChecklist() {
     }))
 
     const payload: ChecklistPayload = {
+      tipo: tipo.codigo,
       veiculoId: veiculo.id,
       motoristaId: perfil?.motorista_id ?? undefined,
       odometro: Number(odometro.replace(',', '.')) || undefined,
+      horimetro: tipo.pede_horimetro ? Number(horimetro.replace(',', '.')) || undefined : undefined,
       respostas: listaRespostas,
       fotos,
     }
@@ -213,7 +235,40 @@ export default function TelaNovoChecklist() {
           </View>
         )}
 
-        <Text style={styles.rotulo}>KM do odômetro</Text>
+        <Text style={styles.rotulo}>Tipo de checklist</Text>
+        {carregandoItens ? (
+          <ActivityIndicator style={{ alignSelf: 'flex-start' }} />
+        ) : (
+          <View style={styles.listaVeiculos}>
+            {tipos.length === 0 && <Text style={styles.vazio}>Sem conexão para carregar os tipos.</Text>}
+            {tipos.map((t) => (
+              <Pressable
+                key={t.codigo}
+                onPress={() => setTipo(t)}
+                style={[styles.chip, styles.chipTipo, tipo?.codigo === t.codigo && styles.chipSelecionado]}
+              >
+                <Text style={[styles.chipTexto, tipo?.codigo === t.codigo && styles.chipTextoSelecionado]}>
+                  {t.nome}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {tipo?.pede_horimetro && (
+          <>
+            <Text style={styles.rotulo}>Horímetro</Text>
+            <TextInput
+              style={styles.input}
+              value={horimetro}
+              onChangeText={setHorimetro}
+              keyboardType="decimal-pad"
+              placeholder="Ex.: 3520"
+            />
+          </>
+        )}
+
+        <Text style={styles.rotulo}>{tipo?.pede_horimetro ? 'KM do odômetro (se tiver)' : 'KM do odômetro'}</Text>
         <TextInput
           style={styles.input}
           value={odometro}
@@ -223,66 +278,74 @@ export default function TelaNovoChecklist() {
         />
 
         <View style={styles.separador} />
-        <Text style={styles.contador}>
-          {respondidos}/{itens.length} itens avaliados
-        </Text>
 
-        {carregandoItens ? (
-          <ActivityIndicator style={{ marginTop: 20 }} />
-        ) : (
-          itens.map((item, indice) => {
+        {!carregandoItens && !tipo && (
+          <Text style={styles.dicaTipo}>Escolha o tipo de checklist para ver os itens.</Text>
+        )}
+
+        {tipo && (
+          <Text style={styles.contador}>
+            {respondidos}/{itensDoTipo.length} itens avaliados
+          </Text>
+        )}
+
+        {!carregandoItens &&
+          itensDoTipo.map((item, indice) => {
             const r = respostas[item.id]
             const foto = fotosPorItem[item.id]
+            const abreSecao = item.secao && item.secao !== itensDoTipo[indice - 1]?.secao
             return (
-              <View key={item.id} style={styles.itemCartao}>
-                <Text style={styles.itemDescricao}>
-                  {indice + 1}. {item.descricao}
-                </Text>
-                <View style={styles.opcoes}>
-                  <OpcaoValor rotulo="OK" ativo={r?.valor === 'sim'} onPress={() => definirValor(item.id, 'sim')} cor="#0f766e" />
-                  <OpcaoValor rotulo="Não" ativo={r?.valor === 'nao'} onPress={() => definirValor(item.id, 'nao')} cor="#be123c" />
-                  <OpcaoValor rotulo="N/A" ativo={r?.valor === 'na'} onPress={() => definirValor(item.id, 'na')} cor="#64748b" />
-                </View>
-                {r?.valor === 'nao' && (
-                  <TextInput
-                    style={styles.inputObs}
-                    value={r.observacao}
-                    onChangeText={(t) => definirObservacao(item.id, t)}
-                    placeholder="O que está errado?"
-                  />
-                )}
-                <View style={styles.linhaFoto}>
-                  {foto ? (
-                    <View style={styles.fotoItemPronta}>
-                      <Pressable onPress={() => setFotoAberta(foto.uriLocal)}>
-                        <Image source={{ uri: foto.uriLocal }} style={styles.miniaturaItem} resizeMode="cover" />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => removerFotoItem(item.id)}
-                        hitSlop={8}
-                        style={styles.removerFotoItem}
-                      >
-                        <Text style={styles.removerFotoItemTexto}>✕</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <Pressable
-                      onPress={() => tirarFotoItem(item.id)}
-                      disabled={capturandoItemId === item.id}
-                      style={[styles.botaoFotoItem, capturandoItemId === item.id && styles.desabilitado]}
-                    >
-                      {capturandoItemId === item.id ? (
-                        <ActivityIndicator size="small" color="#0d9488" />
-                      ) : (
-                        <Text style={styles.botaoFotoItemTexto}>📷 Foto</Text>
-                      )}
-                    </Pressable>
+              <View key={item.id}>
+                {abreSecao && <Text style={styles.secao}>{item.secao}</Text>}
+                <View style={styles.itemCartao}>
+                  <Text style={styles.itemDescricao}>
+                    {indice + 1}. {item.descricao}
+                  </Text>
+                  <View style={styles.opcoes}>
+                    <OpcaoValor rotulo="OK" ativo={r?.valor === 'sim'} onPress={() => definirValor(item.id, 'sim')} cor="#0f766e" />
+                    <OpcaoValor rotulo="Não" ativo={r?.valor === 'nao'} onPress={() => definirValor(item.id, 'nao')} cor="#be123c" />
+                    <OpcaoValor rotulo="N/A" ativo={r?.valor === 'na'} onPress={() => definirValor(item.id, 'na')} cor="#64748b" />
+                  </View>
+                  {r?.valor === 'nao' && (
+                    <TextInput
+                      style={styles.inputObs}
+                      value={r.observacao}
+                      onChangeText={(t) => definirObservacao(item.id, t)}
+                      placeholder="O que está errado?"
+                    />
                   )}
+                  <View style={styles.linhaFoto}>
+                    {foto ? (
+                      <View style={styles.fotoItemPronta}>
+                        <Pressable onPress={() => setFotoAberta(foto.uriLocal)}>
+                          <Image source={{ uri: foto.uriLocal }} style={styles.miniaturaItem} resizeMode="cover" />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => removerFotoItem(item.id)}
+                          hitSlop={8}
+                          style={styles.removerFotoItem}
+                        >
+                          <Text style={styles.removerFotoItemTexto}>✕</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => tirarFotoItem(item.id)}
+                        disabled={capturandoItemId === item.id}
+                        style={[styles.botaoFotoItem, capturandoItemId === item.id && styles.desabilitado]}
+                      >
+                        {capturandoItemId === item.id ? (
+                          <ActivityIndicator size="small" color="#0d9488" />
+                        ) : (
+                          <Text style={styles.botaoFotoItemTexto}>📷 Foto</Text>
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
               </View>
             )
-          })
-        )}
+          })}
       </ScrollView>
 
       <Modal visible={fotoAberta !== null} transparent animationType="fade" onRequestClose={() => setFotoAberta(null)}>
@@ -372,6 +435,16 @@ const styles = StyleSheet.create({
   chipSelecionado: { backgroundColor: '#0d9488', borderColor: '#0d9488' },
   chipTexto: { fontSize: 14, fontWeight: '600', color: '#334155' },
   chipTextoSelecionado: { color: '#fff' },
+  chipTipo: { paddingHorizontal: 20, paddingVertical: 10 },
+  dicaTipo: { fontSize: 14, color: '#64748b', marginTop: 16, textAlign: 'center' },
+  secao: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.5,
+    marginTop: 10,
+    marginBottom: 8,
+  },
   veiculoEscolhido: {
     flexDirection: 'row',
     alignItems: 'center',

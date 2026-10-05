@@ -101,11 +101,24 @@ export interface AnexoAprovacao {
   criado_em: string
 }
 
+/** Cada tipo de veículo tem a própria lista de itens (migration 0067 em
+ *  frotas-web). */
+export interface TipoChecklist {
+  codigo: string
+  nome: string
+  ordem: number
+  pede_horimetro: boolean
+  ativo: boolean
+}
+
 export interface ItemChecklistModelo {
   id: number
   ordem: number
   descricao: string
   ativo: boolean
+  tipo: string
+  /** Seção do formulário (MOTOR, CARROCERIA, ...). Nulo = sem seção. */
+  secao: string | null
 }
 
 export interface Checklist {
@@ -114,6 +127,8 @@ export interface Checklist {
   motorista_id: number | null
   data_hora: string
   odometro: number | null
+  horimetro: number | null
+  tipo: string
   regional_id: number | null
   criado_por: string | null
   origem_local_id: string | null

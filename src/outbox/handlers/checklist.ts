@@ -13,9 +13,13 @@ export interface RespostaPayload {
 }
 
 export interface ChecklistPayload {
+  /** Ausente em checklist que entrou na fila antes da escolha de tipo --
+   *  o banco assume VEICULO. */
+  tipo?: string
   veiculoId: number
   motoristaId?: number
   odometro?: number
+  horimetro?: number
   respostas: RespostaPayload[]
   fotos: FotoPayload[]
   checklistId?: number
@@ -33,9 +37,11 @@ async function enviar(
     const { data, error } = await supabase
       .from('frota_checklists')
       .insert({
+        ...(payload.tipo ? { tipo: payload.tipo } : {}),
         veiculo_id: payload.veiculoId,
         motorista_id: payload.motoristaId ?? null,
         odometro: payload.odometro ?? null,
+        horimetro: payload.horimetro ?? null,
         origem_local_id: ctx.itemId,
       })
       .select('id')
